@@ -1,6 +1,4 @@
 const {
-	Client,
-	Interaction,
 	ApplicationCommandOptionType,
 	ActionRowBuilder,
 	ButtonBuilder,
@@ -8,190 +6,234 @@ const {
 } = require('discord.js');
 
 const User = require('../../models/User');
+const Item = require('../../models/Item');
 
-const cooldowns = new Set();
+const directions = ['up', 'down', 'left', 'right'];
 
-function getRandom(min, max) {
-	return Math.floor(Math.random() * (max - min + 1)) + min;
+const arrows = {
+	up: '⬆️',
+	down: '⬇️',
+	left: '⬅️',
+	right: '➡️',
+};
+
+const reverse = {
+	up: 'down',
+	down: 'up',
+	left: 'right',
+	right: 'left',
+};
+
+function randDir() {
+	return directions[Math.floor(Math.random() * directions.length)];
+}
+
+function sleep(ms) {
+	return new Promise(r => setTimeout(r, ms));
 }
 
 module.exports = {
 	name: 'robmoney',
-	description: 'Cướp tiền người khác',
+	description: 'Cướp tiền bằng cạy khóa 😈',
+
 	options: [
 		{
-			name: 'target-user',
-			description: 'Bạn muốn cướp của ai?',
+			name: 'target',
+			description: 'Người bạn muốn cướp',
 			type: ApplicationCommandOptionType.User,
 			required: true,
 		},
+		{
+			name: 'amount',
+			description: 'Số tiền muốn cướp',
+			type: ApplicationCommandOptionType.Integer,
+			required: true,
+			minValue: 50,
+		},
 	],
 
-	/**
-	 * @param {Client} client
-	 * @param {Interaction} interaction
-	 */
 	callback: async (client, interaction) => {
-		if (!interaction.inGuild()) {
-			return interaction.reply({
-				content: 'Chỉ dùng trong server!',
-				ephemeral: true,
-			});
-		}
+		if (!interaction.inGuild()) return;
 
-		const target = interaction.options.getUser('target-user');
+		const userId = interaction.user.id;
+		const guildId = interaction.guild.id;
 
-		// ❌ không được tự cướp
-		if (target.id === interaction.user.id) {
-			return interaction.reply({
-				content: 'Bạn không thể tự cướp chính mình!',
-				ephemeral: true,
-			});
-		}
+		const target = interaction.options.getUser('target');
+		let money = interaction.options.getInteger('amount');
 
-		// ⏳ cooldown theo user
-		if (cooldowns.has(interaction.user.id)) {
-			return interaction.reply({
-				content: 'Bạn vừa cướp xong, đợi 1h nữa!',
-				ephemeral: true,
-			});
+		if (target.id === userId) {
+			return interaction.reply({ content: '❌ Không thể tự cướp!', ephemeral: true });
 		}
 
 		await interaction.deferReply();
 
-		const queryUser = {
-			userId: interaction.user.id,
-			guildId: interaction.guild.id,
-		};
+		const user = await User.findOne({ userId, guildId });
+		const targetUser = await User.findOne({ userId: target.id, guildId });
 
-		const queryTarget = {
+		if (!user || !targetUser || targetUser.balance <= 0) {
+			return interaction.editReply('❌ Không thể cướp!');
+		}
+
+		if (money > targetUser.balance) money = targetUser.balance;
+
+		const now = Date.now();
+
+		// ================= ITEM TARGET =================
+		const hasCamera = await Item.findOne({
 			userId: target.id,
-			guildId: interaction.guild.id,
-		};
-
-		const userRob = await User.findOne(queryUser);
-		const userTarget = await User.findOne(queryTarget);
-
-		// ❌ chưa có tài khoản
-		if (!userRob) {
-			return interaction.editReply('Bạn chưa có tiền để đi cướp!');
-		}
-
-		if (!userTarget) {
-			return interaction.editReply('Người này không có tiền để cướp!');
-		}
-
-		// 💸 random tiền
-		let moneyRob = getRandom(100, 500);
-
-		if (userTarget.balance <= 0) {
-			return interaction.editReply('Người này nghèo quá rồi!');
-		}
-
-		if (moneyRob > userTarget.balance) {
-			moneyRob = userTarget.balance;
-		}
-
-		// 🎯 % bị bắt (30%)
-		const failChance = Math.random();
-
-		const msg = await interaction.editReply({
-			content: `🚨 ${interaction.user.username} đang cướp ${target.username}!\n⏳ Bạn có 60s để phản ứng!`,
-			components: [
-				new ActionRowBuilder().addComponents(
-					new ButtonBuilder()
-						.setCustomId('catch')
-						.setLabel('Bắt cướp')
-						.setStyle(ButtonStyle.Danger),
-					new ButtonBuilder()
-						.setCustomId('cancel')
-						.setLabel('Huỷ')
-						.setStyle(ButtonStyle.Secondary)
-				),
-			],
+			guildId,
+			type: 'guard',
+			$or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
 		});
 
-		const collector = msg.createMessageComponentCollector({
-			time: 60000,
+		const hasLockBasic = await Item.findOne({
+			userId: target.id,
+			guildId,
+			type: 'lock_basic',
+			$or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
 		});
 
-		let caught = false;
-		let cancelled = false;
-
-		collector.on('collect', async (btn) => {
-			await btn.deferUpdate();
-
-			// 👮 bị bắt
-			if (btn.customId === 'catch') {
-				if (btn.user.id === target.id) {
-					caught = true;
-
-					userRob.balance -= 100;
-					await userRob.save();
-
-					return interaction.editReply({
-						content: `🚔 ${interaction.user.username} bị ${target.username} bắt!\n💸 Mất 100K tiền phạt`,
-						components: [],
-					});
-				} else {
-					return interaction.followUp({
-						content: 'Bạn không phải người bị cướp!',
-						ephemeral: true,
-					});
-				}
-			}
-
-			// ❌ huỷ
-			if (btn.customId === 'cancel') {
-				if (btn.user.id === interaction.user.id) {
-					cancelled = true;
-					collector.stop();
-
-					return interaction.editReply({
-						content: '❌ Bạn đã huỷ cướp',
-						components: [],
-					});
-				} else {
-					return interaction.followUp({
-						content: 'Bạn không phải người cướp!',
-						ephemeral: true,
-					});
-				}
-			}
+		const hasLockSmart = await Item.findOne({
+			userId: target.id,
+			guildId,
+			type: 'lock_smart',
+			$or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
 		});
 
-		collector.on('end', async () => {
-			// nếu bị bắt hoặc huỷ thì dừng
-			if (caught || cancelled) return;
+		// ================= CAMERA =================
+		if (hasCamera) {
+			const penalty = Math.floor(money * 0.5);
 
-			// 💥 random fail
-			if (failChance < 0.3) {
-				userRob.balance -= 50;
-				await userRob.save();
+			user.balance -= penalty;
+			targetUser.balance += penalty;
+
+			await user.save();
+			await targetUser.save();
+
+			return interaction.editReply(
+				`📹 Camera phát hiện!\n🚔 Bạn bị bắt!\n💸 Mất ${penalty} Wcoin`
+			);
+		}
+
+		// ================= LOCKPICK =================
+		const lockpick = await Item.findOne({
+			userId,
+			guildId,
+			type: 'lockpick',
+		});
+
+		if (!lockpick || lockpick.quantity <= 0) {
+			return interaction.editReply('❌ Bạn cần **Lockpick**!');
+		}
+
+		// 🔥 TRỪ 1 LOCKPICK
+		lockpick.quantity -= 1;
+
+		if (lockpick.quantity <= 0) {
+			await lockpick.deleteOne();
+		} else {
+			await lockpick.save();
+		}
+
+		await interaction.followUp({
+			content: '🛠️ Đã dùng 1 Lockpick',
+			ephemeral: true,
+		});
+
+		// ================= ĐỘ KHÓ =================
+		let length = Math.min(Math.max(Math.floor(money / 200), 3), 10);
+
+		if (hasLockBasic) length *= 2;
+
+		// 🎲 tạo mã
+		let code = [];
+		for (let i = 0; i < length; i++) {
+			code.push(randDir());
+		}
+
+		// 🧠 đảo chiều
+		if (hasLockSmart) {
+			code = code.map(d => reverse[d]);
+		}
+
+		// ================= UI =================
+		let info = `🔐 Đang cạy khóa...\n`;
+
+		if (hasLockBasic) info += `🔒 Khóa chống trộm (x2 độ dài)\n`;
+		if (hasLockSmart) info += `🧠 Khóa thông minh (đảo chiều)\n`;
+		if (!hasLockBasic && !hasLockSmart) info += `❌ Không có khóa`;
+
+		await interaction.editReply(info);
+
+		await sleep(1000);
+
+		await interaction.editReply(code.map(d => arrows[d]).join(' '));
+
+		await sleep(1000);
+
+		const row = new ActionRowBuilder().addComponents(
+			new ButtonBuilder().setCustomId('up').setLabel('⬆️').setStyle(ButtonStyle.Secondary),
+			new ButtonBuilder().setCustomId('down').setLabel('⬇️').setStyle(ButtonStyle.Secondary),
+			new ButtonBuilder().setCustomId('left').setLabel('⬅️').setStyle(ButtonStyle.Secondary),
+			new ButtonBuilder().setCustomId('right').setLabel('➡️').setStyle(ButtonStyle.Secondary),
+		);
+
+		await interaction.editReply({
+			content: `🔁 Nhập lại mã (${length} bước)`,
+			components: [row],
+		});
+
+		const msg = await interaction.fetchReply();
+
+		let input = [];
+
+		const collector = msg.createMessageComponentCollector({ time: 20000 });
+
+		collector.on('collect', async (i) => {
+			if (i.user.id !== userId)
+				return i.reply({ content: '❌ Không phải bạn!', ephemeral: true });
+
+			input.push(i.customId);
+			await i.deferUpdate();
+
+			// ❌ sai
+			if (input[input.length - 1] !== code[input.length - 1]) {
+				collector.stop();
+
+				const lost = Math.floor(money * 0.2);
+				user.balance -= lost;
+				await user.save();
 
 				return interaction.editReply({
-					content: `❌ Cướp thất bại! Bạn mất 50K`,
+					content: `💥 Sai! Mất ${lost} Wcoin`,
 					components: [],
 				});
 			}
 
-			// ✅ thành công
-			userTarget.balance -= moneyRob;
-			userRob.balance += moneyRob;
+			// ✅ đúng hết
+			if (input.length === code.length) {
+				collector.stop();
 
-			await userTarget.save();
-			await userRob.save();
+				targetUser.balance -= money;
+				user.balance += money;
 
-			interaction.editReply({
-				content: `💰 Cướp thành công! Bạn lấy được ${moneyRob}K`,
-				components: [],
-			});
+				await targetUser.save();
+				await user.save();
+
+				return interaction.editReply({
+					content: `💰 Thành công! +${money} Wcoin`,
+					components: [],
+				});
+			}
 		});
 
-		// ⏳ set cooldown
-		cooldowns.add(interaction.user.id);
-		setTimeout(() => {
-			cooldowns.delete(interaction.user.id);
-		}, 3600000);
+		collector.on('end', async () => {
+			if (input.length !== code.length) {
+				await interaction.editReply({
+					content: `⏳ Hết giờ! Thất bại`,
+					components: [],
+				});
+			}
+		});
 	},
 };
