@@ -1,10 +1,6 @@
 const { Client, Interaction, AttachmentBuilder } = require('discord.js');
 const User = require('../../models/User');
-const Canvas = require('canvas');
-const fetch = require('node-fetch'); // npm install node-fetch@2
-
-// Cài đặt fetch global cho canvas
-globalThis.fetch = fetch;
+const { createCanvas, loadImage } = require('@napi-rs/canvas'); // ✅ đổi ở đây
 
 module.exports = {
     name: 'leaderboard',
@@ -34,7 +30,7 @@ module.exports = {
             // Canvas setup
             const width = 800;
             const height = 600;
-            const canvas = Canvas.createCanvas(width, height);
+            const canvas = createCanvas(width, height); // ✅ đổi
             const ctx = canvas.getContext('2d');
 
             // Background
@@ -43,13 +39,14 @@ module.exports = {
 
             // Title
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 36px Sans';
+            ctx.font = 'bold 36px sans-serif';
             ctx.fillText('🏆 BẢNG XẾP HẠNG Wcoin', 20, 50);
 
             // Vẽ từng top
             for (let i = 0; i < topUsers.length; i++) {
                 const userData = topUsers[i];
                 let member;
+
                 try {
                     member = await interaction.guild.members.fetch(userData.userId);
                 } catch {
@@ -57,29 +54,39 @@ module.exports = {
                 }
 
                 const username = member ? member.user.username : `User ${userData.userId}`;
-                const avatarURL = member ? member.user.displayAvatarURL({ extension: 'png', size: 64 }) : null;
+                const avatarURL = member
+                    ? member.user.displayAvatarURL({ extension: 'png', size: 64 })
+                    : null;
 
-                // Màu nền cho top 3
-                if (i === 0) ctx.fillStyle = '#FFD700'; // vàng
-                else if (i === 1) ctx.fillStyle = '#C0C0C0'; // bạc
-                else if (i === 2) ctx.fillStyle = '#CD7F32'; // đồng
-                else ctx.fillStyle = '#7289da'; // xanh khác
+                // Màu nền
+                if (i === 0) ctx.fillStyle = '#FFD700';
+                else if (i === 1) ctx.fillStyle = '#C0C0C0';
+                else if (i === 2) ctx.fillStyle = '#CD7F32';
+                else ctx.fillStyle = '#7289da';
 
                 ctx.fillRect(20, 80 + i * 50, width - 40, 45);
 
-                // Vẽ avatar nếu có
+                // Avatar
                 if (avatarURL) {
-                    const avatar = await Canvas.loadImage(avatarURL);
+                    const avatar = await loadImage(avatarURL); // ✅ đổi
                     ctx.drawImage(avatar, 30, 85 + i * 50, 40, 40);
                 }
 
-                // Vẽ tên + Wcoin
+                // Text
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 20px Sans';
-                ctx.fillText(`#${i + 1} ${username} : ${userData.balance} Wcoin`, 80, 115 + i * 50);
+                ctx.font = 'bold 20px sans-serif';
+                ctx.fillText(
+                    `#${i + 1} ${username} : ${userData.balance} Wcoin`,
+                    80,
+                    115 + i * 50
+                );
             }
 
-            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'leaderboard.png' });
+            const buffer = canvas.toBuffer('image/png'); // ✅ thêm mime type (khuyên dùng)
+
+            const attachment = new AttachmentBuilder(buffer, {
+                name: 'leaderboard.png',
+            });
 
             await interaction.editReply({ files: [attachment] });
 
