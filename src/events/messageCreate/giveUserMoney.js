@@ -137,7 +137,7 @@ module.exports = async (client, message) => {
 	if (!message.inGuild() || message.author.bot) return;
 
 	// 🎯 tỉ lệ xuất hiện
-	if (getRandom(1, 100) > 5) return;
+	if (getRandom(1, 1000) > 5) return;
 
 	// ⛔ cooldown
 	if (cooldowns.has(message.guild.id)) return;
