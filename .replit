@@ -20,7 +20,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node src/index.js"
+args = "node --no-warnings src/index.js"
 
 [workflows.workflow.metadata]
 outputType = "console"

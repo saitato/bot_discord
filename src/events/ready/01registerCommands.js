@@ -2,6 +2,19 @@ const areCommandsDifferent = require('../../utils/areCommandsDifferent');
 const getApplicationCommands = require('../../utils/getApplicationCommands');
 const getLocalCommands = require('../../utils/getLocalCommands');
 
+const parseGuildIds = (value) =>
+	value
+		?.split(',')
+		.map((id) => id.trim())
+		.filter(Boolean) || [];
+
+const getTargetGuildIds = () => {
+	const guildIds = parseGuildIds(process.env.GUILD_IDS);
+
+	if (guildIds?.length) return guildIds;
+	return parseGuildIds(process.env.GUILD_ID);
+};
+
 module.exports = async (client) => {
 	try {
 		const rawCommands = getLocalCommands();
@@ -22,15 +35,7 @@ module.exports = async (client) => {
 		});
 
 		const USE_GLOBAL = process.env.USE_GLOBAL_COMMANDS === 'true';
-
-		const guildCommands = await getApplicationCommands(
-			client,
-			process.env.GUILD_ID
-		);
-
-		const globalCommands = USE_GLOBAL
-			? await getApplicationCommands(client)
-			: null;
+		const targetGuildIds = getTargetGuildIds();
 
 		// ===== SYNC FUNCTION =====
 		const sync = async (applicationCommands, type) => {
@@ -90,13 +95,42 @@ module.exports = async (client) => {
 			}
 		};
 
+		const clearGlobalCommands = async () => {
+			const globalCommands = await getApplicationCommands(client);
+
+			if (!globalCommands.cache.size) {
+				console.log('ℹ Không có GLOBAL commands cần xóa');
+				return;
+			}
+
+			for (const existingCommand of globalCommands.cache.values()) {
+				await globalCommands.delete(existingCommand.id);
+				console.log(`🗑 [GLOBAL] Deleted "${existingCommand.name}"`);
+			}
+		};
+
 		// ===== RUN =====
 		if (USE_GLOBAL) {
+			const globalCommands = await getApplicationCommands(client);
 			await sync(globalCommands, 'GLOBAL');
 			console.log('🌍 Đang dùng GLOBAL commands');
 		} else {
-			await sync(guildCommands, 'GUILD');
-			console.log('🏠 Đang dùng GUILD commands');
+			await clearGlobalCommands();
+
+			if (!targetGuildIds.length) {
+				console.log('❌ Chưa có GUILD_ID hoặc GUILD_IDS để đăng ký guild commands');
+				return;
+			}
+
+			for (const guildId of targetGuildIds) {
+				try {
+					const guildCommands = await getApplicationCommands(client, guildId);
+					await sync(guildCommands, `GUILD ${guildId}`);
+					console.log(`🏠 Đã sync commands cho guild ${guildId}`);
+				} catch (err) {
+					console.log(`❌ Không thể sync guild ${guildId}:`, err.message);
+				}
+			}
 		}
 
 		console.log('✅ Command sync hoàn tất');

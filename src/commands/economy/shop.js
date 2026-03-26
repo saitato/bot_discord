@@ -1,313 +1,335 @@
 const {
-	EmbedBuilder,
-	ActionRowBuilder,
-	StringSelectMenuBuilder,
-	ButtonBuilder,
-	ButtonStyle,
+  EmbedBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require('discord.js');
-
 const mongoose = require('mongoose');
 const User = require('../../models/User');
 const Item = require('../../models/Item');
+const Bag = require('../../models/Bag');
+const { addMissionProgress } = require('../../utils/dailyMissions');
+const {
+  ITEMS,
+  getInventorySlots,
+  formatDuration,
+} = require('../../utils/economyItems');
 
-// ================= ITEM =================
-const ITEMS = {
-	camera: {
-		name: '🛡️ Camera',
-		type: 'guard',
-		price: 500,
-		desc: 'Auto bắt cướp (24h)',
-		stack: false,
-	},
-	lock_basic: {
-		name: '🔒 Khóa chống trộm',
-		type: 'lock_basic',
-		price: 200,
-		desc: 'x2 độ dài mã (24h)',
-		stack: false,
-	},
-	lock_smart: {
-		name: '🧠 Khóa thông minh',
-		type: 'lock_smart',
-		price: 300,
-		desc: 'Đảo chiều input (24h)',
-		stack: false,
-	},
-	lockpick: {
-		name: '🛠️ Lockpick',
-		type: 'lockpick',
-		price: 200,
-		desc: 'Dùng để cướp',
-		stack: true,
-	},
-};
+async function removeExpiredItems(userId, guildId, session = null) {
+  const query = {
+    userId,
+    guildId,
+    expiresAt: { $gt: 0, $lte: Date.now() },
+  };
 
-// ================= TIME =================
-function formatTime(ms) {
-	const h = Math.floor(ms / 3600000);
-	const m = Math.floor((ms % 3600000) / 60000);
-	const s = Math.floor((ms % 60000) / 1000);
-	return `${h}h ${m}m ${s}s`;
+  if (session) {
+    await Item.deleteMany(query).session(session);
+    return;
+  }
+
+  await Item.deleteMany(query);
 }
 
-// ================= ITEM INFO (cho ephemeral) =================
+async function getUsedSlots(userId, guildId, session = null) {
+  const query = {
+    userId,
+    guildId,
+    $or: [{ expiresAt: 0 }, { expiresAt: { $gt: Date.now() } }],
+  };
+
+  let req = Item.countDocuments(query);
+  if (session) req = req.session(session);
+  return req;
+}
+
+async function getUserSlots(userId, guildId, session = null) {
+  let req = Bag.findOne({ userId, guildId });
+  if (session) req = req.session(session);
+  const bagData = await req;
+  return getInventorySlots(bagData?.level || 1);
+}
+
 async function getItemInfo(userId, guildId, type) {
-	const item = await Item.findOne({ userId, guildId, type });
+  const item = await Item.findOne({ userId, guildId, type });
 
-	let quantity = item?.quantity || 0;
-	let text = `📦 Số lượng: ${quantity}`;
+  if (!item) return '📦 Bạn chưa sở hữu món này.';
 
-	if (item?.expiresAt) {
-		if (item.expiresAt > Date.now()) {
-			text += `\n⏳ ${formatTime(item.expiresAt - Date.now())}`;
-		} else {
-			text += `\n⏳ Đã hết hạn`;
-		}
-	}
+  const lines = [`📦 Số lượng: ${item.quantity || 0}`];
 
-	return text;
+  if (item.expiresAt > 0) {
+    if (item.expiresAt > Date.now()) {
+      lines.push(`⏳ Còn lại: ${formatDuration(item.expiresAt - Date.now())}`);
+    } else {
+      lines.push('⏳ Đã hết hạn');
+    }
+  } else {
+    lines.push('⏳ Vĩnh viễn');
+  }
+
+  return lines.join('\n');
 }
 
-// ================= BUILD EMBED CHÍNH =================
 async function buildShopEmbed(userId, guildId) {
-	const user = await User.findOne({ userId, guildId });
+  await removeExpiredItems(userId, guildId);
 
-	let desc = `💰 Số dư: **${user.balance} Wcoin**\n\n`;
+  const [user, slots, usedSlots] = await Promise.all([
+    User.findOne({ userId, guildId }),
+    getUserSlots(userId, guildId),
+    getUsedSlots(userId, guildId),
+  ]);
 
-	for (const i of Object.values(ITEMS)) {
-		desc += `${i.name} - ${i.price} Wcoin\n${i.desc}\n\n`;
-	}
+  const desc = [
+    `💰 Số dư: **${(user?.balance || 0).toLocaleString('vi-VN')} Wcoin**`,
+    `🎒 Balo: **${usedSlots}/${slots} ô**`,
+    '',
+    ...Object.values(ITEMS).map(
+      (item) => `${item.name} - **${item.price.toLocaleString('vi-VN')} Wcoin**\n${item.desc}`
+    ),
+  ].join('\n\n');
 
-	return new EmbedBuilder()
-		.setColor('Blue')
-		.setTitle('🛒 SHOP')
-		.setDescription(desc);
+  return new EmbedBuilder()
+    .setColor('#2563EB')
+    .setTitle('🛒 Cửa hàng')
+    .setDescription(desc);
 }
 
-// ================= COOLDOWN =================
 const clickCooldown = new Map();
 
 function checkCooldown(userId) {
-	const now = Date.now();
-	const last = clickCooldown.get(userId) || 0;
+  const now = Date.now();
+  const last = clickCooldown.get(userId) || 0;
 
-	if (now - last < 1500) return false;
+  if (now - last < 1500) return false;
 
-	clickCooldown.set(userId, now);
-	return true;
+  clickCooldown.set(userId, now);
+  return true;
 }
 
-// ================= COMMAND =================
 module.exports = {
-	name: 'shop',
-	description: 'Mua bán item 🛒',
+  name: 'shop',
+  description: 'Mua bán item trong cửa hàng',
 
-	callback: async (client, interaction) => {
-		if (!interaction.inGuild()) return;
+  callback: async (client, interaction) => {
+    if (!interaction.inGuild()) return;
 
-		const userId = interaction.user.id;
-		const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
+    const guildId = interaction.guild.id;
 
-		let user = await User.findOne({ userId, guildId });
-		if (!user) user = await User.create({ userId, guildId, balance: 0 });
+    let user = await User.findOne({ userId, guildId });
+    if (!user) user = await User.create({ userId, guildId, balance: 0 });
 
-		let selected = null;
+    let selected = null;
 
-		// ================= UI =================
-		const select = new StringSelectMenuBuilder()
-			.setCustomId('select_item')
-			.setPlaceholder('Chọn item')
-			.addOptions(
-				Object.entries(ITEMS).map(([key, i]) => ({
-					label: i.name,
-					description: `${i.price} Wcoin`,
-					value: key,
-				}))
-			);
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('select_item')
+      .setPlaceholder('Chọn item')
+      .addOptions(
+        Object.entries(ITEMS).map(([key, item]) => ({
+          label: item.name,
+          description: `${item.price.toLocaleString('vi-VN')} Wcoin`,
+          value: key,
+        }))
+      );
 
-		const buttons = new ActionRowBuilder().addComponents(
-			new ButtonBuilder().setCustomId('buy').setLabel('🛒 Mua').setStyle(ButtonStyle.Success),
-			new ButtonBuilder().setCustomId('sell').setLabel('💰 Bán').setStyle(ButtonStyle.Primary),
-			new ButtonBuilder().setCustomId('cancel').setLabel('❌ Hủy').setStyle(ButtonStyle.Danger)
-		);
+    const buttons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('buy').setLabel('🛒 Mua').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('sell').setLabel('💸 Bán').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('cancel').setLabel('❌ Hủy').setStyle(ButtonStyle.Danger)
+    );
 
-		const embed = await buildShopEmbed(userId, guildId);
+    const embed = await buildShopEmbed(userId, guildId);
 
-		const msg = await interaction.reply({
-			embeds: [embed],
-			components: [
-				new ActionRowBuilder().addComponents(select),
-				buttons,
-			],
-			fetchReply: true,
-		});
+    const msg = await interaction.reply({
+      embeds: [embed],
+      components: [
+        new ActionRowBuilder().addComponents(select),
+        buttons,
+      ],
+      fetchReply: true,
+    });
 
-		const collector = msg.createMessageComponentCollector({ time: 60000 });
+    const collector = msg.createMessageComponentCollector({ time: 60000 });
 
-		collector.on('collect', async (i) => {
-			if (i.user.id !== userId)
-				return i.reply({ content: '❌ Không phải của bạn!', ephemeral: true });
+    collector.on('collect', async (i) => {
+      if (i.user.id !== userId) {
+        return i.reply({ content: '❌ Đây không phải cửa hàng của bạn!', ephemeral: true });
+      }
 
-			if (!checkCooldown(userId))
-				return i.reply({ content: '⏳ Đợi 1.5s!', ephemeral: true });
+      if (!checkCooldown(userId)) {
+        return i.reply({ content: '⏳ Hãy chờ 1.5 giây rồi thử lại!', ephemeral: true });
+      }
 
-			// ❌ CANCEL
-			if (i.customId === 'cancel') {
-				collector.stop();
-				return i.update({
-					content: '❌ Đã đóng shop',
-					embeds: [],
-					components: [],
-				});
-			}
+      if (i.customId === 'cancel') {
+        collector.stop();
+        return i.update({
+          content: '❌ Đã đóng cửa hàng',
+          embeds: [],
+          components: [],
+        });
+      }
 
-			// 🎯 CHỌN ITEM
-			if (i.isStringSelectMenu()) {
-				selected = i.values[0];
-				const item = ITEMS[selected];
+      if (i.isStringSelectMenu()) {
+        selected = i.values[0];
+        const item = ITEMS[selected];
+        const info = await getItemInfo(userId, guildId, item.type);
 
-				const info = await getItemInfo(userId, guildId, item.type);
+        return i.reply({
+          content: `✅ ${item.name}\n${item.desc}\n\n${info}`,
+          ephemeral: true,
+        });
+      }
 
-				return i.reply({
-					content: `✅ ${item.name}\n${item.desc}\n\n${info}`,
-					ephemeral: true,
-				});
-			}
+      if (!selected) {
+        return i.reply({ content: '❌ Bạn chưa chọn item!', ephemeral: true });
+      }
 
-			if (!selected)
-				return i.reply({ content: '❌ Chưa chọn item!', ephemeral: true });
+      const item = ITEMS[selected];
+      const session = await mongoose.startSession();
+      session.startTransaction();
 
-			const item = ITEMS[selected];
+      try {
+        let userDoc = await User.findOne({ userId, guildId }).session(session);
+        if (!userDoc) {
+          userDoc = new User({ userId, guildId, balance: 0 });
+        }
 
-			// ================= TRANSACTION =================
-			const session = await mongoose.startSession();
-			session.startTransaction();
+        await removeExpiredItems(userId, guildId, session);
 
-			try {
-				let userDoc = await User.findOne({ userId, guildId }).session(session);
-				let exist = await Item.findOne({ userId, guildId, type: item.type }).session(session);
+        let exist = await Item.findOne({ userId, guildId, type: item.type }).session(session);
 
-				// ================= BUY =================
-				if (i.customId === 'buy') {
-					if (userDoc.balance < item.price)
-						throw new Error('NOT_ENOUGH');
+        if (i.customId === 'buy') {
+          if (userDoc.balance < item.price) {
+            throw new Error('NOT_ENOUGH');
+          }
 
-					if (item.stack) {
-						if (exist) {
-							exist.quantity += 1;
-							await exist.save({ session });
-						} else {
-							await Item.create([{
-								userId,
-								guildId,
-								type: item.type,
-								quantity: 1,
-							}], { session });
-						}
-					} else {
-						if (exist && exist.expiresAt > Date.now())
-							throw new Error('ALREADY_HAVE');
+          const slots = await getUserSlots(userId, guildId, session);
+          const usedSlots = await getUsedSlots(userId, guildId, session);
+          const hasActiveItem = exist && (exist.expiresAt === 0 || exist.expiresAt > Date.now());
 
-						if (exist) {
-							exist.expiresAt = Date.now() + 86400000;
-							exist.quantity = 1;
-							await exist.save({ session });
-						} else {
-							await Item.create([{
-								userId,
-								guildId,
-								type: item.type,
-								quantity: 1,
-								expiresAt: Date.now() + 86400000,
-							}], { session });
-						}
-					}
+          if (!hasActiveItem && usedSlots >= slots) {
+            throw new Error('BAG_FULL');
+          }
 
-					userDoc.balance -= item.price;
-					await userDoc.save({ session });
+          if (item.stack) {
+            if (exist) {
+              exist.quantity += 1;
+              await exist.save({ session });
+            } else {
+              await Item.create(
+                [{ userId, guildId, type: item.type, quantity: 1 }],
+                { session }
+              );
+            }
+          } else if (exist) {
+            if (exist.expiresAt > Date.now()) {
+              throw new Error('ALREADY_HAVE');
+            }
 
-					await session.commitTransaction();
+            exist.expiresAt = Date.now() + 86400000;
+            exist.quantity = 1;
+            await exist.save({ session });
+          } else {
+            await Item.create(
+              [{
+                userId,
+                guildId,
+                type: item.type,
+                quantity: 1,
+                expiresAt: Date.now() + 86400000,
+              }],
+              { session }
+            );
+          }
 
-					// 🔄 UPDATE EMBED
-					const newEmbed = await buildShopEmbed(userId, guildId);
+          userDoc.balance -= item.price;
+          await userDoc.save({ session });
 
-					await i.update({
-						embeds: [newEmbed],
-						components: [
-							new ActionRowBuilder().addComponents(select),
-							buttons,
-						],
-					});
+          await session.commitTransaction();
 
-					return i.followUp({
-						content: `✅ Mua ${item.name} thành công`,
-						ephemeral: true,
-					});
-				}
+          const newEmbed = await buildShopEmbed(userId, guildId);
+          await i.update({
+            embeds: [newEmbed],
+            components: [
+              new ActionRowBuilder().addComponents(select),
+              buttons,
+            ],
+          });
 
-				// ================= SELL =================
-				if (i.customId === 'sell') {
-					if (!exist || exist.quantity <= 0)
-						throw new Error('NO_ITEM');
+          await addMissionProgress(userId, guildId, 'buy_item', 1);
 
-					const refund = Math.floor(item.price * 0.75);
+          return i.followUp({
+            content: `✅ Mua ${item.name} thành công`,
+            ephemeral: true,
+          });
+        }
 
-					if (item.stack) {
-						exist.quantity -= 1;
+        if (i.customId === 'sell') {
+          if (!exist || exist.quantity <= 0) {
+            throw new Error('NO_ITEM');
+          }
 
-						if (exist.quantity <= 0) {
-							await exist.deleteOne({ session });
-						} else {
-							await exist.save({ session });
-						}
-					} else {
-						await exist.deleteOne({ session });
-					}
+          const refund = Math.floor(item.price * 0.75);
 
-					userDoc.balance += refund;
-					await userDoc.save({ session });
+          if (item.stack) {
+            exist.quantity -= 1;
 
-					await session.commitTransaction();
+            if (exist.quantity <= 0) {
+              await exist.deleteOne({ session });
+            } else {
+              await exist.save({ session });
+            }
+          } else {
+            await exist.deleteOne({ session });
+          }
 
-					// 🔄 UPDATE EMBED
-					const newEmbed = await buildShopEmbed(userId, guildId);
+          userDoc.balance += refund;
+          await userDoc.save({ session });
 
-					await i.update({
-						embeds: [newEmbed],
-						components: [
-							new ActionRowBuilder().addComponents(select),
-							buttons,
-						],
-					});
+          await session.commitTransaction();
 
-					return i.followUp({
-						content: `💰 +${refund} Wcoin`,
-						ephemeral: true,
-					});
-				}
+          const newEmbed = await buildShopEmbed(userId, guildId);
+          await i.update({
+            embeds: [newEmbed],
+            components: [
+              new ActionRowBuilder().addComponents(select),
+              buttons,
+            ],
+          });
 
-			} catch (err) {
-				await session.abortTransaction();
+          return i.followUp({
+            content: `💸 Bạn nhận lại ${refund.toLocaleString('vi-VN')} Wcoin`,
+            ephemeral: true,
+          });
+        }
+      } catch (err) {
+        await session.abortTransaction();
 
-				if (err.message === 'NOT_ENOUGH')
-					return i.reply({ content: '❌ Không đủ tiền!', ephemeral: true });
+        if (err.message === 'NOT_ENOUGH') {
+          return i.reply({ content: '❌ Bạn không đủ Wcoin!', ephemeral: true });
+        }
 
-				if (err.message === 'ALREADY_HAVE')
-					return i.reply({ content: '❌ Đang còn hiệu lực!', ephemeral: true });
+        if (err.message === 'ALREADY_HAVE') {
+          return i.reply({ content: '❌ Item này vẫn đang còn hiệu lực!', ephemeral: true });
+        }
 
-				if (err.message === 'NO_ITEM')
-					return i.reply({ content: '❌ Số lượng đang có là 0', ephemeral: true });
+        if (err.message === 'NO_ITEM') {
+          return i.reply({ content: '❌ Bạn không có item này để bán!', ephemeral: true });
+        }
 
-				console.log(err);
-				return i.reply({ content: '❌ Lỗi hệ thống!', ephemeral: true });
+        if (err.message === 'BAG_FULL') {
+          return i.reply({ content: '❌ Balo đã đầy, hãy tăng level hoặc bán bớt item!', ephemeral: true });
+        }
 
-			} finally {
-				session.endSession();
-			}
-		});
+        console.log(err);
+        return i.reply({ content: '❌ Đã xảy ra lỗi hệ thống!', ephemeral: true });
+      } finally {
+        session.endSession();
+      }
+    });
 
-		collector.on('end', async () => {
-			await interaction.editReply({ components: [] });
-		});
-	},
+    collector.on('end', async () => {
+      await interaction.editReply({ components: [] }).catch(() => null);
+    });
+  },
 };

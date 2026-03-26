@@ -1,239 +1,296 @@
 const {
-	ApplicationCommandOptionType,
-	ActionRowBuilder,
-	ButtonBuilder,
-	ButtonStyle,
+  ApplicationCommandOptionType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require('discord.js');
-
 const User = require('../../models/User');
 const Item = require('../../models/Item');
 
 const directions = ['up', 'down', 'left', 'right'];
+const activeRobberies = new Map();
 
 const arrows = {
-	up: '⬆️',
-	down: '⬇️',
-	left: '⬅️',
-	right: '➡️',
+  up: '⬆️',
+  down: '⬇️',
+  left: '⬅️',
+  right: '➡️',
 };
 
 const reverse = {
-	up: 'down',
-	down: 'up',
-	left: 'right',
-	right: 'left',
+  up: 'down',
+  down: 'up',
+  left: 'right',
+  right: 'left',
 };
 
 function randDir() {
-	return directions[Math.floor(Math.random() * directions.length)];
+  return directions[Math.floor(Math.random() * directions.length)];
 }
 
 function sleep(ms) {
-	return new Promise(r => setTimeout(r, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRobberyKey(guildId, userId) {
+  return `${guildId}:${userId}`;
+}
+
+function releaseRobbery(robberKey, targetKey) {
+  activeRobberies.delete(robberKey);
+  activeRobberies.delete(targetKey);
+}
+
+async function playLockpickEffect(interaction, targetName) {
+  const frames = [
+    `🛠️ Đang tra Lockpick vào ổ khóa của **${targetName}**...`,
+    `🛠️⚙️ Đang xoay chốt khóa...`,
+    `🛠️✨ Tìm thấy điểm yếu của ổ khóa...`,
+  ];
+
+  for (const frame of frames) {
+    await interaction.editReply(frame);
+    await sleep(700);
+  }
 }
 
 module.exports = {
-	name: 'robmoney',
-	description: 'Cướp tiền bằng cạy khóa 😈',
+  name: 'robmoney',
+  description: 'Cướp tiền bằng cạy khóa',
 
-	options: [
-		{
-			name: 'target',
-			description: 'Người bạn muốn cướp',
-			type: ApplicationCommandOptionType.User,
-			required: true,
-		},
-		{
-			name: 'amount',
-			description: 'Số tiền muốn cướp',
-			type: ApplicationCommandOptionType.Integer,
-			required: true,
-			minValue: 50,
-		},
-	],
+  options: [
+    {
+      name: 'target',
+      description: 'Người bạn muốn cướp',
+      type: ApplicationCommandOptionType.User,
+      required: true,
+    },
+    {
+      name: 'amount',
+      description: 'Số tiền muốn cướp',
+      type: ApplicationCommandOptionType.Integer,
+      required: true,
+      minValue: 50,
+    },
+  ],
 
-	callback: async (client, interaction) => {
-		if (!interaction.inGuild()) return;
+  callback: async (client, interaction) => {
+    if (!interaction.inGuild()) return;
 
-		const userId = interaction.user.id;
-		const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
+    const guildId = interaction.guild.id;
+    const target = interaction.options.getUser('target');
+    let money = interaction.options.getInteger('amount');
 
-		const target = interaction.options.getUser('target');
-		let money = interaction.options.getInteger('amount');
+    const robberKey = getRobberyKey(guildId, userId);
+    const targetKey = getRobberyKey(guildId, target.id);
 
-		if (target.id === userId) {
-			return interaction.reply({ content: '❌ Không thể tự cướp!', ephemeral: true });
-		}
+    if (target.id === userId) {
+      return interaction.reply({
+        content: '❌ Không thể tự cướp chính mình!',
+        ephemeral: true,
+      });
+    }
 
-		await interaction.deferReply();
+    if (activeRobberies.has(robberKey)) {
+      return interaction.reply({
+        content: '❌ Bạn đang thực hiện một vụ cướp khác rồi!',
+        ephemeral: true,
+      });
+    }
 
-		const user = await User.findOne({ userId, guildId });
-		const targetUser = await User.findOne({ userId: target.id, guildId });
+    if (activeRobberies.has(targetKey)) {
+      return interaction.reply({
+        content: '❌ Người này đang bị nhắm tới trong một vụ cướp khác!',
+        ephemeral: true,
+      });
+    }
 
-		if (!user || !targetUser || targetUser.balance <= 0) {
-			return interaction.editReply('❌ Không thể cướp!');
-		}
+    activeRobberies.set(robberKey, true);
+    activeRobberies.set(targetKey, true);
 
-		if (money > targetUser.balance) money = targetUser.balance;
+    try {
+      await interaction.deferReply();
 
-		const now = Date.now();
+      const user = await User.findOne({ userId, guildId });
+      const targetUser = await User.findOne({ userId: target.id, guildId });
 
-		// ================= ITEM TARGET =================
-		const hasCamera = await Item.findOne({
-			userId: target.id,
-			guildId,
-			type: 'guard',
-			$or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
-		});
+      if (!user || !targetUser || targetUser.balance <= 0) {
+        releaseRobbery(robberKey, targetKey);
+        return interaction.editReply('❌ Không thể cướp người này!');
+      }
 
-		const hasLockBasic = await Item.findOne({
-			userId: target.id,
-			guildId,
-			type: 'lock_basic',
-			$or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
-		});
+      if (money > targetUser.balance) {
+        money = targetUser.balance;
+      }
 
-		const hasLockSmart = await Item.findOne({
-			userId: target.id,
-			guildId,
-			type: 'lock_smart',
-			$or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
-		});
+      const now = Date.now();
 
-		// ================= CAMERA =================
-		if (hasCamera) {
-			const penalty = Math.floor(money * 0.5);
+      const hasCamera = await Item.findOne({
+        userId: target.id,
+        guildId,
+        type: 'guard',
+        $or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
+      });
 
-			user.balance -= penalty;
-			targetUser.balance += penalty;
+      const hasLockBasic = await Item.findOne({
+        userId: target.id,
+        guildId,
+        type: 'lock_basic',
+        $or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
+      });
 
-			await user.save();
-			await targetUser.save();
+      const hasLockSmart = await Item.findOne({
+        userId: target.id,
+        guildId,
+        type: 'lock_smart',
+        $or: [{ expiresAt: 0 }, { expiresAt: { $gt: now } }],
+      });
 
-			return interaction.editReply(
-				`📹 Camera phát hiện!\n🚔 Bạn bị bắt!\n💸 Mất ${penalty} Wcoin`
-			);
-		}
+      if (hasCamera) {
+        const penalty = Math.floor(money * 0.5);
+        user.balance -= penalty;
+        targetUser.balance += penalty;
 
-		// ================= LOCKPICK =================
-		const lockpick = await Item.findOne({
-			userId,
-			guildId,
-			type: 'lockpick',
-		});
+        await user.save();
+        await targetUser.save();
 
-		if (!lockpick || lockpick.quantity <= 0) {
-			return interaction.editReply('❌ Bạn cần **Lockpick**!');
-		}
+        releaseRobbery(robberKey, targetKey);
+        return interaction.editReply(
+          `📹 Camera phát hiện!\n🚔 Bạn bị bắt tại trận.\n💸 Mất ${penalty.toLocaleString('vi-VN')} Wcoin`
+        );
+      }
 
-		// 🔥 TRỪ 1 LOCKPICK
-		lockpick.quantity -= 1;
+      const lockpick = await Item.findOne({
+        userId,
+        guildId,
+        type: 'lockpick',
+      });
 
-		if (lockpick.quantity <= 0) {
-			await lockpick.deleteOne();
-		} else {
-			await lockpick.save();
-		}
+      if (!lockpick || lockpick.quantity <= 0) {
+        releaseRobbery(robberKey, targetKey);
+        return interaction.editReply('❌ Bạn cần có **Lockpick** để cướp!');
+      }
 
-		await interaction.followUp({
-			content: '🛠️ Đã dùng 1 Lockpick',
-			ephemeral: true,
-		});
+      lockpick.quantity -= 1;
 
-		// ================= ĐỘ KHÓ =================
-		let length = Math.min(Math.max(Math.floor(money / 200), 3), 10);
+      if (lockpick.quantity <= 0) {
+        await lockpick.deleteOne();
+      } else {
+        await lockpick.save();
+      }
 
-		if (hasLockBasic) length *= 2;
+      await interaction.followUp({
+        content: '🛠️ Đã dùng 1 Lockpick',
+        ephemeral: true,
+      });
 
-		// 🎲 tạo mã
-		let code = [];
-		for (let i = 0; i < length; i++) {
-			code.push(randDir());
-		}
+      await playLockpickEffect(interaction, target.username);
 
-		// 🧠 đảo chiều
-		if (hasLockSmart) {
-			code = code.map(d => reverse[d]);
-		}
+      let length = Math.min(Math.max(Math.floor(money / 200), 3), 10);
+      if (hasLockBasic) length *= 2;
 
-		// ================= UI =================
-		let info = `🔐 Đang cạy khóa...\n`;
+      let code = Array.from({ length }, () => randDir());
+      if (hasLockSmart) {
+        code = code.map((direction) => reverse[direction]);
+      }
 
-		if (hasLockBasic) info += `🔒 Khóa chống trộm (x2 độ dài)\n`;
-		if (hasLockSmart) info += `🧠 Khóa thông minh (đảo chiều)\n`;
-		if (!hasLockBasic && !hasLockSmart) info += `❌ Không có khóa`;
+      const info = [
+        '🔐 Đang cạy khóa...',
+        hasLockBasic ? '🔒 Khóa chống trộm: tăng gấp đôi độ dài mã' : null,
+        hasLockSmart ? '🧠 Khóa thông minh: đảo chiều nút bấm' : null,
+        !hasLockBasic && !hasLockSmart ? '❌ Mục tiêu không trang bị khóa' : null,
+      ].filter(Boolean).join('\n');
 
-		await interaction.editReply(info);
+      await interaction.editReply(info);
+      await sleep(1000);
 
-		await sleep(1000);
+      await interaction.editReply(code.map((direction) => arrows[direction]).join(' '));
+      await sleep(1500);
 
-		await interaction.editReply(code.map(d => arrows[d]).join(' '));
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('up').setLabel('⬆️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('down').setLabel('⬇️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('left').setLabel('⬅️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('right').setLabel('➡️').setStyle(ButtonStyle.Secondary),
+      );
 
-		await sleep(1000);
+      await interaction.editReply({
+        content: `🔁 Nhập lại mã gồm **${length} bước**`,
+        components: [row],
+      });
 
-		const row = new ActionRowBuilder().addComponents(
-			new ButtonBuilder().setCustomId('up').setLabel('⬆️').setStyle(ButtonStyle.Secondary),
-			new ButtonBuilder().setCustomId('down').setLabel('⬇️').setStyle(ButtonStyle.Secondary),
-			new ButtonBuilder().setCustomId('left').setLabel('⬅️').setStyle(ButtonStyle.Secondary),
-			new ButtonBuilder().setCustomId('right').setLabel('➡️').setStyle(ButtonStyle.Secondary),
-		);
+      const msg = await interaction.fetchReply();
+      const input = [];
+      let finished = false;
 
-		await interaction.editReply({
-			content: `🔁 Nhập lại mã (${length} bước)`,
-			components: [row],
-		});
+      const collector = msg.createMessageComponentCollector({ time: 20000 });
 
-		const msg = await interaction.fetchReply();
+      collector.on('collect', async (buttonInteraction) => {
+        if (buttonInteraction.user.id !== userId) {
+          return buttonInteraction.reply({
+            content: '❌ Đây không phải vụ cướp của bạn!',
+            ephemeral: true,
+          });
+        }
 
-		let input = [];
+        input.push(buttonInteraction.customId);
+        await buttonInteraction.deferUpdate();
 
-		const collector = msg.createMessageComponentCollector({ time: 20000 });
+        if (input[input.length - 1] !== code[input.length - 1]) {
+          finished = true;
+          collector.stop('failed');
 
-		collector.on('collect', async (i) => {
-			if (i.user.id !== userId)
-				return i.reply({ content: '❌ Không phải bạn!', ephemeral: true });
+          const lost = Math.floor(money * 0.2);
+          user.balance -= lost;
+          await user.save();
 
-			input.push(i.customId);
-			await i.deferUpdate();
+          await interaction.editReply({
+            content: `💥 Sai mã! Bạn mất ${lost.toLocaleString('vi-VN')} Wcoin`,
+            components: [],
+          });
+          return;
+        }
 
-			// ❌ sai
-			if (input[input.length - 1] !== code[input.length - 1]) {
-				collector.stop();
+        if (input.length === code.length) {
+          finished = true;
+          collector.stop('success');
 
-				const lost = Math.floor(money * 0.2);
-				user.balance -= lost;
-				await user.save();
+          targetUser.balance -= money;
+          user.balance += money;
 
-				return interaction.editReply({
-					content: `💥 Sai! Mất ${lost} Wcoin`,
-					components: [],
-				});
-			}
+          await targetUser.save();
+          await user.save();
 
-			// ✅ đúng hết
-			if (input.length === code.length) {
-				collector.stop();
+          await interaction.editReply({
+            content: `💰 Thành công! Bạn cướp được ${money.toLocaleString('vi-VN')} Wcoin`,
+            components: [],
+          });
+        }
+      });
 
-				targetUser.balance -= money;
-				user.balance += money;
+      collector.on('end', async () => {
+        releaseRobbery(robberKey, targetKey);
 
-				await targetUser.save();
-				await user.save();
+        if (!finished) {
+          await interaction.editReply({
+            content: '⏳ Hết giờ! Vụ cướp thất bại.',
+            components: [],
+          }).catch(() => null);
+        }
+      });
+    } catch (error) {
+      releaseRobbery(robberKey, targetKey);
+      console.log(error);
 
-				return interaction.editReply({
-					content: `💰 Thành công! +${money} Wcoin`,
-					components: [],
-				});
-			}
-		});
+      if (interaction.deferred || interaction.replied) {
+        return interaction.editReply('❌ Đã xảy ra lỗi khi thực hiện vụ cướp.');
+      }
 
-		collector.on('end', async () => {
-			if (input.length !== code.length) {
-				await interaction.editReply({
-					content: `⏳ Hết giờ! Thất bại`,
-					components: [],
-				});
-			}
-		});
-	},
+      return interaction.reply({
+        content: '❌ Đã xảy ra lỗi khi thực hiện vụ cướp.',
+        ephemeral: true,
+      });
+    }
+  },
 };

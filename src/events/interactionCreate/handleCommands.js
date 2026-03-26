@@ -1,5 +1,18 @@
 const getLocalCommands = require('../../utils/getLocalCommands');
 
+const parseGuildIds = (value) =>
+  value
+    ?.split(',')
+    .map((id) => id.trim())
+    .filter(Boolean) || [];
+
+const getTestGuildIds = () => {
+  const guildIds = parseGuildIds(process.env.GUILD_IDS);
+
+  if (guildIds?.length) return guildIds;
+  return parseGuildIds(process.env.GUILD_ID);
+};
+
 module.exports = async (client, interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -23,7 +36,9 @@ module.exports = async (client, interaction) => {
     }
 
     if (commandObject.testOnly) {
-      if (!(interaction.guild.id === process.env.GUILD_ID)) {
+      const testGuildIds = getTestGuildIds();
+
+      if (!testGuildIds.includes(interaction.guild.id)) {
         interaction.reply({
           content: 'This command cannot be ran here.',
           ephemeral: true,

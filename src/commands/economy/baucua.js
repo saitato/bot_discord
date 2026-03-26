@@ -11,6 +11,7 @@ const {
 } = require('discord.js');
 
 const User = require('../../models/User');
+const { addMissionProgress } = require('../../utils/dailyMissions');
 
 const items = ['bau', 'cua', 'ca', 'tom', 'ga', 'nai'];
 
@@ -224,6 +225,7 @@ module.exports = {
 					// trừ tiền
 					user.balance -= amount;
 					await user.save();
+					await addMissionProgress(userId, interaction.guild.id, 'play_game', 1);
 
 					bets.set(userId, {
 						choice: choice.item,
@@ -299,6 +301,7 @@ module.exports = {
 				if (match > 0) {
 					const win = match * bet.amount * 2;
 					user.balance += win;
+					await addMissionProgress(userId, interaction.guild.id, 'win_game', 1);
 					result += `✅ ${bet.username} +${win} Wcoin\n`;
 				} else {
 					result += `❌ ${bet.username} -${bet.amount} Wcoin\n`;
