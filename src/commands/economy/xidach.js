@@ -11,6 +11,7 @@ const fetch = require('node-fetch');
 
 const User = require('../../models/User');
 const { addMissionProgress } = require('../../utils/dailyMissions');
+const { ensureCanvasFont } = require('../../utils/canvasFont');
 const {
   CARD_BACKS,
   PLAYING_CARDS,
@@ -24,7 +25,7 @@ const HIT_BUTTON_ID = 'xidach_hit';
 const STAND_BUTTON_ID = 'xidach_stand';
 const ACTIVE_GAMES = new Set();
 const IMAGE_CACHE = new Map();
-const CANVAS_FONT_FAMILY = 'sans-serif';
+const CANVAS_FONT_FAMILY = ensureCanvasFont();
 
 function shuffle(array) {
   const copy = [...array];
