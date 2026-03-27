@@ -6,6 +6,8 @@ const {
 const Item = require('../../models/Item');
 const Bag = require('../../models/Bag');
 const {
+  getBossItemTotalStatValue,
+  getEquipmentSlotLabel,
   getItemByType,
   getInventorySlots,
   formatDuration,
@@ -20,13 +22,19 @@ const createSlotBar = (used, total, size = 10) => {
 const buildItemLine = (item, index) => {
   const meta = getItemByType(item.type);
   const itemName = meta?.name || `📦 ${item.type}`;
+  const itemLevelText = item.itemLevel > 0 ? ` • Lv ${item.itemLevel}` : '';
+  const upgradeText = meta?.stat ? ` • +${item.upgradeLevel || 0}` : '';
+  const slotText = meta?.slot ? ` • ${getEquipmentSlotLabel(meta.slot)}` : '';
+  const statText = meta?.stat
+    ? ` • ${meta.stat === 'crit' ? 'Crit' : meta.stat === 'armor_pen' ? 'Xuyên giáp' : 'ATK'} +${getBossItemTotalStatValue(meta, item.itemLevel || 10, item.upgradeLevel || 0)}`
+    : '';
   const quantityText = `SL: ${item.quantity}`;
   const statusText =
     item.expiresAt > 0
       ? `Hạn: ${formatDuration(item.expiresAt - Date.now())}`
       : 'Vĩnh viễn';
 
-  return `\`${String(index + 1).padStart(2, '0')}\` ${itemName}\n> ${quantityText} • ${statusText}`;
+  return `\`${String(index + 1).padStart(2, '0')}\` ${itemName}${itemLevelText}${upgradeText}${slotText}${statText}\n> ${quantityText} • ${statusText}`;
 };
 
 module.exports = {
