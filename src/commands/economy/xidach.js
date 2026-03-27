@@ -24,6 +24,7 @@ const HIT_BUTTON_ID = 'xidach_hit';
 const STAND_BUTTON_ID = 'xidach_stand';
 const ACTIVE_GAMES = new Set();
 const IMAGE_CACHE = new Map();
+const CANVAS_FONT_FAMILY = 'sans-serif';
 
 function shuffle(array) {
   const copy = [...array];
@@ -230,7 +231,7 @@ function drawCardFallback(ctx, x, y, width, height, label, hidden = false) {
   ctx.stroke();
 
   ctx.fillStyle = hidden ? '#e2e8f0' : '#0f172a';
-  ctx.font = `bold ${hidden ? 22 : 18}px Arial`;
+  ctx.font = `bold ${hidden ? 26 : 22}px ${CANVAS_FONT_FAMILY}`;
   ctx.textAlign = 'center';
   ctx.fillText(hidden ? '?' : label, x + width / 2, y + height / 2 + 8);
   ctx.textAlign = 'left';
@@ -238,9 +239,9 @@ function drawCardFallback(ctx, x, y, width, height, label, hidden = false) {
 
 async function drawHand(ctx, cards, x, y, options = {}) {
   const hideSecondCard = options.hideSecondCard || false;
-  const cardWidth = 68;
-  const cardHeight = 104;
-  const gap = 18;
+  const cardWidth = 132;
+  const cardHeight = 202;
+  const gap = 144;
 
   for (let index = 0; index < cards.length; index += 1) {
     const hidden = hideSecondCard && index === 1;
@@ -257,18 +258,18 @@ async function drawHand(ctx, cards, x, y, options = {}) {
 }
 
 async function renderBoard(state, revealDealer = false) {
-  const width = 820;
-  const height = 360;
+  const width = 980;
+  const height = 760;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
   const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, '#0b3d20');
-  bg.addColorStop(1, '#14532d');
+  bg.addColorStop(0, '#050505');
+  bg.addColorStop(1, '#111111');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
   for (let i = 0; i < 10; i += 1) {
     ctx.beginPath();
     ctx.arc(50 + i * 75, 30 + (i % 3) * 95, 2 + (i % 2), 0, Math.PI * 2);
@@ -276,7 +277,7 @@ async function renderBoard(state, revealDealer = false) {
   }
 
   roundRect(ctx, 18, 18, width - 36, height - 36, 18);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.lineWidth = 1;
@@ -289,19 +290,20 @@ async function renderBoard(state, revealDealer = false) {
   const playerScore = calculateHandValue(state.playerCards);
 
   ctx.fillStyle = '#f8fafc';
-  ctx.font = 'bold 24px Arial';
-  ctx.fillText('Xì dách', 32, 46);
-  ctx.font = '18px Arial';
-  ctx.fillText(`Cược: ${state.bet.toLocaleString('vi-VN')} Wcoin`, 32, 72);
+  ctx.font = `bold 46px ${CANVAS_FONT_FAMILY}`;
+  ctx.fillText('Xi dach', 28, 64);
+  ctx.font = `30px ${CANVAS_FONT_FAMILY}`;
+  ctx.fillText(`Cuoc: ${state.bet.toLocaleString('vi-VN')} Wcoin`, 28, 110);
 
   ctx.fillStyle = '#fde68a';
-  ctx.font = 'bold 20px Arial';
-  ctx.fillText(`Máy (${dealerScore} điểm)`, 32, 108);
-  await drawHand(ctx, state.dealerCards, 32, 120, { hideSecondCard: !revealDealer });
+  ctx.font = `bold 36px ${CANVAS_FONT_FAMILY}`;
+  ctx.fillText(`May (${dealerScore} diem)`, 28, 172);
+  await drawHand(ctx, state.dealerCards, 28, 216, { hideSecondCard: !revealDealer });
 
   ctx.fillStyle = '#bfdbfe';
-  ctx.fillText(`${state.username} (${playerScore} điểm)`, 32, 230);
-  await drawHand(ctx, state.playerCards, 32, 242);
+  ctx.font = `bold 36px ${CANVAS_FONT_FAMILY}`;
+  ctx.fillText(`${state.username} (${playerScore} diem)`, 28, 492);
+  await drawHand(ctx, state.playerCards, 28, 536);
 
   return canvas.toBuffer('image/png');
 }
