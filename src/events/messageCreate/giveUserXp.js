@@ -95,7 +95,10 @@ module.exports = async (client, message) => {
 
 			// 📩 gửi DM riêng
 			try {
-				await message.author.send({ embeds: [embed] });
+				await message.channel.send({
+					content: `${message.author}`,
+					embeds: [embed],
+				});
 			} catch {
 				console.log('User tắt DM');
 			}
