@@ -1,4 +1,6 @@
 const DailyMission = require('../models/DailyMission');
+const { addEventMissionProgress } = require('./eventMissions');
+const grantExperience = require('./grantExperience');
 
 const DAILY_TIMEZONE = 'Asia/Saigon';
 const MESSAGE_MISSION_COOLDOWN_MS = 5 * 60 * 1000;
@@ -11,6 +13,7 @@ const MISSION_POOLS = {
       label: 'Ngồi voice đủ 10 phút',
       target: 10,
       reward: 150,
+      expReward: 20,
     },
     {
       missionId: 'game_easy_1',
@@ -18,6 +21,7 @@ const MISSION_POOLS = {
       label: 'Chơi Bầu cua hoặc Tài xỉu 1 lần',
       target: 1,
       reward: 180,
+      expReward: 24,
     },
     {
       missionId: 'shop_easy_1',
@@ -25,6 +29,7 @@ const MISSION_POOLS = {
       label: 'Mua 1 item trong /shop',
       target: 1,
       reward: 200,
+      expReward: 26,
     },
     {
       missionId: 'message_easy_20',
@@ -32,6 +37,7 @@ const MISSION_POOLS = {
       label: 'Gửi 20 tin nhắn hợp lệ',
       target: 20,
       reward: 220,
+      expReward: 28,
     },
     {
       missionId: 'win_easy_1',
@@ -39,6 +45,7 @@ const MISSION_POOLS = {
       label: 'Thắng 1 game bất kỳ',
       target: 1,
       reward: 240,
+      expReward: 30,
     },
   ],
   medium: [
@@ -48,6 +55,7 @@ const MISSION_POOLS = {
       label: 'Ngồi voice đủ 30 phút',
       target: 30,
       reward: 350,
+      expReward: 38,
     },
     {
       missionId: 'game_medium_3',
@@ -55,6 +63,7 @@ const MISSION_POOLS = {
       label: 'Chơi Bầu cua hoặc Tài xỉu 3 lần',
       target: 3,
       reward: 400,
+      expReward: 42,
     },
     {
       missionId: 'shop_medium_2',
@@ -62,6 +71,7 @@ const MISSION_POOLS = {
       label: 'Mua 2 item trong /shop',
       target: 2,
       reward: 450,
+      expReward: 46,
     },
     {
       missionId: 'message_medium_50',
@@ -69,6 +79,7 @@ const MISSION_POOLS = {
       label: 'Gửi 50 tin nhắn hợp lệ',
       target: 50,
       reward: 500,
+      expReward: 50,
     },
     {
       missionId: 'win_medium_2',
@@ -76,6 +87,7 @@ const MISSION_POOLS = {
       label: 'Thắng 2 game bất kỳ',
       target: 2,
       reward: 520,
+      expReward: 54,
     },
   ],
   rare: [
@@ -85,6 +97,7 @@ const MISSION_POOLS = {
       label: 'Ngồi voice đủ 60 phút',
       target: 60,
       reward: 700,
+      expReward: 62,
     },
     {
       missionId: 'game_rare_5',
@@ -92,6 +105,7 @@ const MISSION_POOLS = {
       label: 'Chơi Bầu cua hoặc Tài xỉu 5 lần',
       target: 5,
       reward: 750,
+      expReward: 68,
     },
     {
       missionId: 'shop_rare_3',
@@ -99,6 +113,7 @@ const MISSION_POOLS = {
       label: 'Mua 3 item trong /shop',
       target: 3,
       reward: 800,
+      expReward: 72,
     },
     {
       missionId: 'message_rare_100',
@@ -106,6 +121,7 @@ const MISSION_POOLS = {
       label: 'Gửi 100 tin nhắn hợp lệ',
       target: 100,
       reward: 900,
+      expReward: 78,
     },
     {
       missionId: 'win_rare_5',
@@ -113,6 +129,7 @@ const MISSION_POOLS = {
       label: 'Thắng 5 game bất kỳ',
       target: 5,
       reward: 950,
+      expReward: 84,
     },
   ],
 };
@@ -188,6 +205,8 @@ async function addMissionProgress(userId, guildId, type, amount = 1) {
     await daily.save();
   }
 
+  await addEventMissionProgress(userId, guildId, type, amount);
+
   return daily;
 }
 
@@ -196,22 +215,26 @@ async function claimCompletedMissionRewards(user) {
   const claimable = daily.missions.filter((mission) => mission.completed && !mission.claimed);
 
   if (!claimable.length) {
-    return { daily, claimedReward: 0, claimedMissions: [] };
+    return { daily, claimedReward: 0, claimedExp: 0, claimedMissions: [], xpResult: null };
   }
 
   const claimedReward = claimable.reduce((sum, mission) => sum + mission.reward, 0);
+  const claimedExp = claimable.reduce((sum, mission) => sum + (mission.expReward || 0), 0);
 
   claimable.forEach((mission) => {
     mission.claimed = true;
   });
 
   user.balance += claimedReward;
+  const xpResult = await grantExperience(user.userId, user.guildId, claimedExp);
   await Promise.all([daily.save(), user.save()]);
 
   return {
     daily,
     claimedReward,
+    claimedExp,
     claimedMissions: claimable.map((mission) => mission.label),
+    xpResult,
   };
 }
 
@@ -248,6 +271,8 @@ async function trackMessageMissionProgress(message) {
     daily.lastMessageProgressAt = now;
     await daily.save();
   }
+
+  await addEventMissionProgress(message.author.id, message.guild.id, 'message_count', 1);
 
   return daily;
 }

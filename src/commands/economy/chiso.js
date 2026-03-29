@@ -4,13 +4,39 @@ const {
   ApplicationCommandOptionType,
   EmbedBuilder,
 } = require('discord.js');
-const { getEquipmentSlotLabel } = require('../../utils/economyItems');
+const {
+  getBossItemStatValue,
+  getCombatStatLabel,
+  getEquipmentSlotLabel,
+  getRarityLabel,
+  getSetLabel,
+} = require('../../utils/economyItems');
 const { getEquippedCombatProfile } = require('../../utils/equipmentStats');
 
 function buildEquippedLine(entry) {
   if (!entry) return '`Chưa trang bị`';
-  const statName = entry.meta.stat === 'crit' ? 'Crit' : entry.meta.stat === 'armor_pen' ? 'Xuyên giáp' : 'ATK';
-  return `${entry.meta.name} \`Lv ${entry.itemLevel} +${entry.upgradeLevel || 0}\` • ${getEquipmentSlotLabel(entry.meta.slot)} • ${statName} +${entry.statValue}`;
+
+  const baseStatValue = getBossItemStatValue(entry.meta, entry.itemLevel || 1);
+  const upgradeBonus = Math.max((entry.statValue || 0) - baseStatValue, 0);
+
+  return [
+    `${entry.meta.name} \`Lv ${entry.itemLevel} +${entry.upgradeLevel || 0}\``,
+    `> Ô: ${getEquipmentSlotLabel(entry.meta.slot)} | Độ hiếm: ${getRarityLabel(entry.meta.rarity)} | Set: ${getSetLabel(entry.meta.set)}`,
+    `> ${getCombatStatLabel(entry.meta.stat)} gốc: +${baseStatValue}`,
+    `> Cường hóa: +${upgradeBonus}`,
+    `> Tổng: +${entry.statValue}`,
+  ].join('\n');
+}
+
+function buildSetBonusLines(activeSetBonuses) {
+  if (!activeSetBonuses.length) return '`Chưa kích hoạt set`';
+
+  return activeSetBonuses.map((bonus) => {
+    const statsText = Object.entries(bonus.stats)
+      .map(([stat, value]) => `${getCombatStatLabel(stat)} +${value}`)
+      .join(' | ');
+    return `${getSetLabel(bonus.setKey)} (${bonus.pieces} món): ${statsText}`;
+  }).join('\n');
 }
 
 module.exports = {
@@ -39,13 +65,8 @@ module.exports = {
     await interaction.deferReply();
 
     const targetUser = interaction.options.getUser('user') || interaction.user;
-
-    const profile = await getEquippedCombatProfile(
-      targetUser.id,
-      interaction.guild.id
-    );
-
-    const { stats, level, equippedItems } = profile;
+    const profile = await getEquippedCombatProfile(targetUser.id, interaction.guild.id);
+    const { stats, level, equippedItems, activeSetBonuses } = profile;
 
     const embed = new EmbedBuilder()
       .setColor('#8B5CF6')
@@ -56,21 +77,29 @@ module.exports = {
       .setDescription(
         [
           `**Level nhân vật:** \`Lv ${level}\``,
-          `**Sát thương đánh boss:** \`${stats.totalMin} - ${stats.totalMax}\``,
-          `**Nếu chí mạng:** \`${Math.floor(stats.totalMin * stats.critMultiplier)} - ${Math.floor(stats.totalMax * stats.critMultiplier)}\``,
+          `**Damage boss:** \`${stats.totalMin} - ${stats.totalMax}\``,
+          `**Nếu crit:** \`${Math.floor(stats.totalMin * stats.critMultiplier)} - ${Math.floor(stats.totalMax * stats.critMultiplier)}\``,
+          `**ATK:** \`+${stats.atk}\` | **ATK%:** \`${stats.atkPercent}%\``,
+          `**HP:** \`${stats.hp}\` | **DEF:** \`${stats.def}\``,
+          `**HP cơ bản:** \`${stats.hpBase}\` | **HP từ đồ:** \`+${stats.hpBonus}\``,
+          `**Giảm sát thương từ DEF:** \`${stats.damageReductionPercent}%\``,
+          `**Crit:** \`${stats.crit}%\` | **Crit damage:** \`${stats.critDamagePercent}%\``,
+          `**Tốc đánh:** \`${stats.attackSpeed}%\` | **Hồi chiêu:** \`${stats.cooldownReduction}%\``,
+          `**Né tránh:** \`${stats.dodge}%\` | **Kháng CC:** \`${stats.ccResist}%\``,
+          `**Hút máu:** \`${stats.lifesteal}%\``,
+          `**Xuyên giáp:** \`${stats.armorPen}%\` | **ST kỹ năng:** \`${stats.skillDamage}%\``,
         ].join('\n')
       )
       .addFields(
-        { name: 'ATK cộng thêm', value: `\`+${stats.atk}\``, inline: true },
-        { name: 'Crit', value: `\`${stats.crit}%\``, inline: true },
-        { name: 'Xuyên giáp', value: `\`+${stats.armorPen}\``, inline: true },
+        { name: 'Set đang kích hoạt', value: buildSetBonusLines(activeSetBonuses), inline: false },
         { name: 'Vũ khí', value: buildEquippedLine(equippedItems.weapon), inline: false },
-        { name: 'Áo', value: buildEquippedLine(equippedItems.armor), inline: false },
-        { name: 'Găng tay', value: buildEquippedLine(equippedItems.gloves), inline: false },
+        { name: 'Gang tay', value: buildEquippedLine(equippedItems.gloves), inline: false },
         { name: 'Mũ', value: buildEquippedLine(equippedItems.helmet), inline: false },
-        { name: 'Giày', value: buildEquippedLine(equippedItems.boots), inline: false }
+        { name: 'Giày', value: buildEquippedLine(equippedItems.boots), inline: false },
+        { name: 'Áo', value: buildEquippedLine(equippedItems.armor), inline: false },
+        { name: 'Nhẫn', value: buildEquippedLine(equippedItems.ring), inline: false }
       )
-      .setFooter({ text: 'ATK và Xuyên giáp cộng thẳng vào damage, Crit dùng làm tỉ lệ chí mạng' })
+      .setFooter({ text: 'Chỉ số món đồ gồm stat gốc theo level, cộng thêm từ cường hóa và tổng sau cùng' })
       .setTimestamp();
 
     return interaction.editReply({ embeds: [embed] });

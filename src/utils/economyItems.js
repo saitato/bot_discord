@@ -1,15 +1,15 @@
 const ITEMS = {
   camera: {
     key: 'camera',
-    name: '🛡️ Camera',
+    name: 'Camera',
     type: 'guard',
     price: 500,
-    desc: 'Tự động bắt cướp trong 24 giờ',
+    desc: 'Tu dong bat cuop trong 24 gio',
     stack: false,
   },
   lock_basic: {
     key: 'lock_basic',
-    name: '🔒 Khóa chống trộm',
+    name: 'Khoa chong trom',
     type: 'lock_basic',
     price: 200,
     desc: 'Tăng độ khó khi bị cướp trong 24 giờ',
@@ -17,242 +17,274 @@ const ITEMS = {
   },
   lock_smart: {
     key: 'lock_smart',
-    name: '🧠 Khóa thông minh',
+    name: 'Khoa thong minh',
     type: 'lock_smart',
     price: 300,
-    desc: 'Khóa đảo chiều input trong 24 giờ',
+    desc: 'Khoa dao chieu input trong 24 gio',
     stack: false,
   },
   lockpick: {
     key: 'lockpick',
-    name: '🛠️ Lockpick',
+    name: 'Lockpick',
     type: 'lockpick',
     price: 200,
-    desc: 'Dụng cụ dùng để đi cướp',
+    desc: 'Dung cu de di cuop',
     stack: true,
   },
 };
 
-const BOSS_LOOT_ITEMS = {
-  iron_blade: {
-    key: 'iron_blade',
-    name: '⚔️ Kiếm Sắt',
-    type: 'iron_blade',
-    slot: 'weapon',
-    rarity: 'common',
+const UPGRADE_STONE_RARITIES = {
+  common: { label: 'Thường', successBonus: 0 },
+  rare: { label: 'Hiếm', successBonus: 4 },
+  epic: { label: 'Sử thi', successBonus: 8 },
+  legendary: { label: 'Huyền thoại', successBonus: 12 },
+};
+
+function getUpgradeStoneType(rarity = 'common') {
+  return `upgrade_stone_${rarity}`;
+}
+
+const MATERIAL_ITEMS = Object.keys(UPGRADE_STONE_RARITIES).reduce((acc, rarity) => {
+  const type = getUpgradeStoneType(rarity);
+  acc[type] = {
+    key: type,
+    name: `Đá nâng cấp ${UPGRADE_STONE_RARITIES[rarity].label}`,
+    type,
+    rarity,
+    desc: `Nguyên liệu dùng để nâng cấp trang bị boss, cộng thêm ${UPGRADE_STONE_RARITIES[rarity].successBonus}% tỉ lệ thành công.`,
+    stack: true,
+  };
+  return acc;
+}, {});
+
+const LEVEL_TIERS = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+const MAX_EQUIPMENT_UPGRADE_LEVEL = 10;
+const EQUIPMENT_DOWNGRADE_RATE_ON_FAIL = 50;
+const EQUIPMENT_SLOTS = ['weapon', 'gloves', 'helmet', 'boots', 'armor', 'ring'];
+
+const SLOT_CONFIGS = {
+  weapon: {
+    label: 'Vũ khí',
     stat: 'atk',
-    statValue: 12,
-    desc: 'Vũ khí thường tăng tấn công.',
-    stack: true,
+    baseByLevel: {
+      1: 3,
+      10: 10,
+      20: 16,
+      30: 22,
+      40: 28,
+      50: 34,
+      60: 41,
+      70: 48,
+      80: 56,
+      90: 64,
+      100: 73,
+    },
+    upgradePerLevel: 2.2,
   },
-  hunter_gloves: {
-    key: 'hunter_gloves',
-    name: '🧤 Găng Thợ Săn',
-    type: 'hunter_gloves',
-    slot: 'gloves',
-    rarity: 'common',
+  gloves: {
+    label: 'Găng tay',
+    stat: 'atk_percent',
+    baseByLevel: {
+      1: 1,
+      10: 3,
+      20: 4.8,
+      30: 6.6,
+      40: 8.4,
+      50: 10.2,
+      60: 12.3,
+      70: 14.4,
+      80: 16.8,
+      90: 19.2,
+      100: 22,
+    },
+    upgradePerLevel: 0.75,
+  },
+  helmet: {
+    label: 'Mũ',
     stat: 'crit',
-    statValue: 4,
-    desc: 'Trang bị thường tăng tỉ lệ chí mạng.',
-    stack: true,
+    baseByLevel: {
+      1: 0.8,
+      10: 2.5,
+      20: 4,
+      30: 5.5,
+      40: 7,
+      50: 8.5,
+      60: 10.2,
+      70: 11.9,
+      80: 13.8,
+      90: 15.7,
+      100: 17.8,
+    },
+    upgradePerLevel: 0.65,
   },
-  rusty_breaker: {
-    key: 'rusty_breaker',
-    name: '⛑️ Nón Sắt Cũ',
-    type: 'rusty_breaker',
-    slot: 'helmet',
-    rarity: 'common',
-    stat: 'armor_pen',
-    statValue: 6,
-    desc: 'Mũ thường tăng thêm sát thương gây lên boss.',
-    stack: true,
+  boots: {
+    label: 'Giày',
+    stat: 'attack_speed',
+    baseByLevel: {
+      1: 2,
+      10: 6,
+      20: 10,
+      30: 14,
+      40: 18,
+      50: 22,
+      60: 27,
+      70: 32,
+      80: 38,
+      90: 44,
+      100: 50,
+    },
+    upgradePerLevel: 1.3,
   },
-  leather_armor: {
-    key: 'leather_armor',
-    name: '🧥 Áo Da Thợ Săn',
-    type: 'leather_armor',
-    slot: 'armor',
-    rarity: 'common',
-    stat: 'atk',
-    statValue: 10,
-    desc: 'Áo thường giúp tăng tấn công ổn định.',
-    stack: true,
+  armor: {
+    label: 'Áo',
+    stat: 'hp',
+    baseByLevel: {
+      1: 40,
+      10: 110,
+      20: 190,
+      30: 280,
+      40: 380,
+      50: 490,
+      60: 610,
+      70: 740,
+      80: 880,
+      90: 1030,
+      100: 1190,
+    },
+    upgradePerLevel: 35,
   },
-  swift_boots: {
-    key: 'swift_boots',
-    name: '🥾 Giày Lướt Gió',
-    type: 'swift_boots',
-    slot: 'boots',
-    rarity: 'common',
-    stat: 'armor_pen',
-    statValue: 5,
-    desc: 'Giày thường giúp tăng sát thương lên boss.',
-    stack: true,
+  ring: {
+    label: 'Nhẫn',
+    stat: 'crit_damage',
+    baseByLevel: {
+      1: 3,
+      10: 8,
+      20: 13,
+      30: 18,
+      40: 23,
+      50: 28,
+      60: 34,
+      70: 40,
+      80: 47,
+      90: 54,
+      100: 62,
+    },
+    upgradePerLevel: 2.5,
   },
-  crimson_spear: {
-    key: 'crimson_spear',
-    name: '🗡️ Thương Huyết',
-    type: 'crimson_spear',
-    slot: 'weapon',
-    rarity: 'rare',
-    stat: 'atk',
-    statValue: 24,
-    desc: 'Vũ khí hiếm tăng mạnh tấn công.',
-    stack: true,
+};
+
+const RARITY_CONFIGS = {
+  common: { label: 'Thường', multiplier: 1 },
+  rare: { label: 'Hiếm', multiplier: 1.22 },
+  epic: { label: 'Sử thi', multiplier: 1.5 },
+  legendary: { label: 'Huyền thoại', multiplier: 1.85 },
+};
+
+const SET_CONFIGS = {
+  destroyer: {
+    label: 'Hủy Diệt',
+    bonuses: {
+      2: { armor_pen: 8 },
+      3: { armor_pen: 15 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Hủy Diệt',
+      gloves: 'Găng Hủy Diệt',
+      helmet: 'Mũ Hủy Diệt',
+      boots: 'Giày Hủy Diệt',
+      armor: 'Áo Hủy Diệt',
+      ring: 'Nhẫn Hủy Diệt',
+    },
   },
-  eagle_scope: {
-    key: 'eagle_scope',
-    name: '🪖 Mũ Ưng Nhãn',
-    type: 'eagle_scope',
-    slot: 'helmet',
-    rarity: 'rare',
-    stat: 'crit',
-    statValue: 8,
-    desc: 'Mũ hiếm tăng tỉ lệ chí mạng.',
-    stack: true,
+  arcanist: {
+    label: 'Ma Năng',
+    bonuses: {
+      2: { skill_damage: 8 },
+      3: { skill_damage: 15 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Ma Năng',
+      gloves: 'Găng Ma Năng',
+      helmet: 'Mũ Ma Năng',
+      boots: 'Giày Ma Năng',
+      armor: 'Áo Ma Năng',
+      ring: 'Nhẫn Ma Năng',
+    },
   },
-  drill_edge: {
-    key: 'drill_edge',
-    name: '🔩 Lưỡi Khoan Xuyên',
-    type: 'drill_edge',
-    slot: 'boots',
-    rarity: 'rare',
-    stat: 'armor_pen',
-    statValue: 12,
-    desc: 'Trang bị hiếm tăng xuyên giáp.',
-    stack: true,
+  chrono: {
+    label: 'Thời Không',
+    bonuses: {
+      2: { cooldown_reduction: 8 },
+      3: { cooldown_reduction: 15 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Thời Không',
+      gloves: 'Găng Thời Không',
+      helmet: 'Mũ Thời Không',
+      boots: 'Giày Thời Không',
+      armor: 'Áo Thời Không',
+      ring: 'Nhẫn Thời Không',
+    },
   },
-  storm_armor: {
-    key: 'storm_armor',
-    name: '🦺 Giáp Phong Bạo',
-    type: 'storm_armor',
-    slot: 'armor',
-    rarity: 'rare',
-    stat: 'atk',
-    statValue: 18,
-    desc: 'Áo hiếm tăng thêm sức tấn công.',
-    stack: true,
+  phantom: {
+    label: 'Ảo Ảnh',
+    bonuses: {
+      2: { dodge: 8 },
+      3: { dodge: 15 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Ảo Ảnh',
+      gloves: 'Găng Ảo Ảnh',
+      helmet: 'Mũ Ảo Ảnh',
+      boots: 'Giày Ảo Ảnh',
+      armor: 'Áo Ảo Ảnh',
+      ring: 'Nhẫn Ảo Ảnh',
+    },
   },
-  hawk_gloves: {
-    key: 'hawk_gloves',
-    name: '🧤 Găng Ưng Kích',
-    type: 'hawk_gloves',
-    slot: 'gloves',
-    rarity: 'rare',
-    stat: 'crit',
-    statValue: 9,
-    desc: 'Găng tay hiếm tăng tỉ lệ chí mạng.',
-    stack: true,
+  guardian: {
+    label: 'Bất Diệt',
+    bonuses: {
+      2: { cc_resist: 10 },
+      3: { cc_resist: 18 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Bất Diệt',
+      gloves: 'Găng Bất Diệt',
+      helmet: 'Mũ Bất Diệt',
+      boots: 'Giày Bất Diệt',
+      armor: 'Áo Bất Diệt',
+      ring: 'Nhẫn Bất Diệt',
+    },
   },
-  titan_greatsword: {
-    key: 'titan_greatsword',
-    name: '🗡️ Đại Kiếm Titan',
-    type: 'titan_greatsword',
-    slot: 'weapon',
-    rarity: 'epic',
-    stat: 'atk',
-    statValue: 40,
-    desc: 'Vũ khí sử thi tăng sát thương vượt trội.',
-    stack: true,
+  sanguine: {
+    label: 'Huyết Nguyệt',
+    bonuses: {
+      2: { lifesteal: 4 },
+      3: { lifesteal: 8 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Huyết Nguyệt',
+      gloves: 'Găng Huyết Nguyệt',
+      helmet: 'Mũ Huyết Nguyệt',
+      boots: 'Giày Huyết Nguyệt',
+      armor: 'Áo Huyết Nguyệt',
+      ring: 'Nhẫn Huyết Nguyệt',
+    },
   },
-  phantom_mask: {
-    key: 'phantom_mask',
-    name: '👑 Mũ Ảnh Ma',
-    type: 'phantom_mask',
-    slot: 'helmet',
-    rarity: 'epic',
-    stat: 'crit',
-    statValue: 14,
-    desc: 'Mũ sử thi tăng chí mạng đáng kể.',
-    stack: true,
-  },
-  void_splitter: {
-    key: 'void_splitter',
-    name: '🌌 Đao Rách Không Gian',
-    type: 'void_splitter',
-    slot: 'armor',
-    rarity: 'epic',
-    stat: 'armor_pen',
-    statValue: 20,
-    desc: 'Trang bị sử thi tăng xuyên giáp mạnh.',
-    stack: true,
-  },
-  warlord_gauntlets: {
-    key: 'warlord_gauntlets',
-    name: '🥊 Găng Chiến Vương',
-    type: 'warlord_gauntlets',
-    slot: 'gloves',
-    rarity: 'epic',
-    stat: 'crit',
-    statValue: 15,
-    desc: 'Găng tay sử thi tăng mạnh chí mạng.',
-    stack: true,
-  },
-  abyss_boots: {
-    key: 'abyss_boots',
-    name: '👢 Giày Vực Thẳm',
-    type: 'abyss_boots',
-    slot: 'boots',
-    rarity: 'epic',
-    stat: 'armor_pen',
-    statValue: 18,
-    desc: 'Giày sử thi tăng sát thương gây lên boss.',
-    stack: true,
-  },
-  dragon_king_blade: {
-    key: 'dragon_king_blade',
-    name: '🐉 Kiếm Vương Long',
-    type: 'dragon_king_blade',
-    slot: 'weapon',
-    rarity: 'legendary',
-    stat: 'atk',
-    statValue: 65,
-    desc: 'Vũ khí huyền thoại tăng tấn công cực lớn.',
-    stack: true,
-  },
-  celestial_eye: {
-    key: 'celestial_eye',
-    name: '🧤 Găng Thiên Giới',
-    type: 'celestial_eye',
-    slot: 'gloves',
-    rarity: 'legendary',
-    stat: 'crit',
-    statValue: 22,
-    desc: 'Găng tay huyền thoại tăng chí mạng áp đảo.',
-    stack: true,
-  },
-  godslayer_fang: {
-    key: 'godslayer_fang',
-    name: '🥾 Giày Diệt Thần',
-    type: 'godslayer_fang',
-    slot: 'boots',
-    rarity: 'legendary',
-    stat: 'armor_pen',
-    statValue: 30,
-    desc: 'Giày huyền thoại tăng mạnh sát thương gây lên boss.',
-    stack: true,
-  },
-  celestial_armor: {
-    key: 'celestial_armor',
-    name: '🛡️ Giáp Thiên Tinh',
-    type: 'celestial_armor',
-    slot: 'armor',
-    rarity: 'legendary',
-    stat: 'atk',
-    statValue: 52,
-    desc: 'Áo huyền thoại tăng lượng lớn tấn công.',
-    stack: true,
-  },
-  crown_of_ruin: {
-    key: 'crown_of_ruin',
-    name: '👑 Vương Miện Tàn Diệt',
-    type: 'crown_of_ruin',
-    slot: 'helmet',
-    rarity: 'legendary',
-    stat: 'crit',
-    statValue: 20,
-    desc: 'Mũ huyền thoại tăng mạnh tỉ lệ chí mạng.',
-    stack: true,
+  piercer: {
+    label: 'Phá Giáp',
+    bonuses: {
+      2: { armor_pen: 6 },
+      3: { armor_pen: 12 },
+    },
+    slotNames: {
+      weapon: 'Kiếm Phá Giáp',
+      gloves: 'Găng Phá Giáp',
+      helmet: 'Mũ Phá Giáp',
+      boots: 'Giày Phá Giáp',
+      armor: 'Áo Phá Giáp',
+      ring: 'Nhẫn Phá Giáp',
+    },
   },
 };
 
@@ -268,75 +300,154 @@ const BAG_UPGRADE = {
   9: { successRate: 3, price: 1000 },
 };
 
-const MAX_EQUIPMENT_UPGRADE_LEVEL = 10;
-const EQUIPMENT_DOWNGRADE_RATE_ON_FAIL = 50;
+function getCombatStatLabel(stat) {
+  if (stat === 'atk') return 'ATK';
+  if (stat === 'atk_percent') return 'ATK%';
+  if (stat === 'hp') return 'HP';
+  if (stat === 'crit') return 'Crit';
+  if (stat === 'attack_speed') return 'Tốc đánh';
+  if (stat === 'cooldown_reduction') return 'Hồi chiêu';
+  if (stat === 'dodge') return 'Né tránh';
+  if (stat === 'cc_resist') return 'Kháng khống chế';
+  if (stat === 'lifesteal') return 'Hút máu';
+  if (stat === 'crit_damage') return 'Crit damage';
+  if (stat === 'armor_pen') return 'Xuyên giáp';
+  if (stat === 'skill_damage') return 'Sát thương kỹ năng';
+  return stat || 'Chỉ số';
+}
+
+function getStatPrecision(stat) {
+  return ['atk', 'hp'].includes(stat) ? 0 : 1;
+}
+
+function roundStatValue(stat, value) {
+  const precision = getStatPrecision(stat);
+  const factor = 10 ** precision;
+  return Math.round((Number(value) || 0) * factor) / factor;
+}
+
+function createBossLootItems() {
+  const generated = {};
+
+  for (const [setKey, setConfig] of Object.entries(SET_CONFIGS)) {
+    for (const [slot, slotConfig] of Object.entries(SLOT_CONFIGS)) {
+      for (const [rarityKey, rarityConfig] of Object.entries(RARITY_CONFIGS)) {
+        const itemKey = `${setKey}_${slot}_${rarityKey}`;
+        generated[itemKey] = {
+          key: itemKey,
+          type: itemKey,
+          name: `${setConfig.slotNames[slot]} ${rarityConfig.label}`,
+          slot,
+          set: setKey,
+          rarity: rarityKey,
+          stat: slotConfig.stat,
+          desc: `${slotConfig.label} thuoc set ${setConfig.label}, tang ${getCombatStatLabel(slotConfig.stat)}.`,
+          stack: true,
+        };
+      }
+    }
+  }
+
+  return generated;
+}
+
+const BOSS_LOOT_ITEMS = createBossLootItems();
 
 const ALL_ITEMS = {
   ...ITEMS,
+  ...MATERIAL_ITEMS,
   ...BOSS_LOOT_ITEMS,
 };
 
-const BOSS_LOOT_TABLE = {
-  common: ['iron_blade', 'hunter_gloves', 'rusty_breaker', 'leather_armor', 'swift_boots'],
-  rare: ['crimson_spear', 'eagle_scope', 'drill_edge', 'storm_armor', 'hawk_gloves'],
-  epic: ['titan_greatsword', 'phantom_mask', 'void_splitter', 'warlord_gauntlets', 'abyss_boots'],
-  legendary: ['dragon_king_blade', 'celestial_eye', 'godslayer_fang', 'celestial_armor', 'crown_of_ruin'],
-};
+const BOSS_LOOT_TABLE = Object.keys(RARITY_CONFIGS).reduce((acc, rarity) => {
+  acc[rarity] = Object.values(BOSS_LOOT_ITEMS)
+    .filter((item) => item.rarity === rarity)
+    .map((item) => item.key);
+  return acc;
+}, {});
 
-const EQUIPMENT_SLOTS = ['weapon', 'armor', 'gloves', 'helmet', 'boots'];
+function getEquipmentSlotLabel(slot) {
+  return SLOT_CONFIGS[slot]?.label || 'Trang bị';
+}
 
-const getEquipmentSlotLabel = (slot) => {
-  if (slot === 'weapon') return 'Vũ khí';
-  if (slot === 'armor') return 'Áo';
-  if (slot === 'gloves') return 'Găng tay';
-  if (slot === 'helmet') return 'Mũ';
-  if (slot === 'boots') return 'Giày';
-  return 'Trang bị';
-};
+function getRarityLabel(rarity) {
+  return RARITY_CONFIGS[rarity]?.label || 'Thường';
+}
 
-const getBossItemLevel = (playerLevel) => {
-  const normalizedLevel = Math.max(Number(playerLevel) || 0, 0);
-  return Math.max(10, Math.floor(normalizedLevel / 10) * 10 || 10);
-};
+function getSetLabel(setKey) {
+  return SET_CONFIGS[setKey]?.label || 'Không set';
+}
 
-const getBossItemStatValue = (item, itemLevel = 10) => {
-  const safeLevel = Math.max(Number(itemLevel) || 10, 10);
-  const tier = Math.max(Math.floor(safeLevel / 10), 1);
-  return (item?.statValue || 0) + (tier - 1) * 5;
-};
+function getBossItemLevel(playerLevel) {
+  const normalizedLevel = Math.max(Number(playerLevel) || 1, 1);
+  if (normalizedLevel < 10) return 1;
+  return Math.min(100, Math.max(10, Math.floor(normalizedLevel / 10) * 10));
+}
 
-const getEquipmentUpgradeBonus = (item, upgradeLevel = 0) => {
+function getBaseStatForLevel(item, itemLevel = 1) {
+  const slot = item?.slot;
+  if (!slot || !SLOT_CONFIGS[slot]) return 0;
+  const safeLevel = getBossItemLevel(itemLevel);
+  return SLOT_CONFIGS[slot].baseByLevel[safeLevel] || 0;
+}
+
+function getBossItemStatValue(item, itemLevel = 1) {
+  if (!item?.slot || !item?.stat) return 0;
+
+  const baseValue = getBaseStatForLevel(item, itemLevel);
+  const rarityMultiplier = RARITY_CONFIGS[item.rarity]?.multiplier || 1;
+  return roundStatValue(item.stat, baseValue * rarityMultiplier);
+}
+
+function getEquipmentUpgradeBonus(item, upgradeLevel = 0) {
+  if (!item?.slot || !item?.stat) return 0;
   const safeUpgradeLevel = Math.max(Number(upgradeLevel) || 0, 0);
-  const perLevelBonus = Math.max(Math.ceil((item?.statValue || 0) / 6), 1);
-  return safeUpgradeLevel * perLevelBonus;
-};
+  const perLevelBonus = SLOT_CONFIGS[item.slot]?.upgradePerLevel || 0;
+  return roundStatValue(item.stat, safeUpgradeLevel * perLevelBonus);
+}
 
-const getBossItemTotalStatValue = (item, itemLevel = 10, upgradeLevel = 0) =>
-  getBossItemStatValue(item, itemLevel) + getEquipmentUpgradeBonus(item, upgradeLevel);
+function getBossItemTotalStatValue(item, itemLevel = 1, upgradeLevel = 0) {
+  return roundStatValue(
+    item?.stat,
+    getBossItemStatValue(item, itemLevel) + getEquipmentUpgradeBonus(item, upgradeLevel)
+  );
+}
 
-const getEquipmentUpgradeInfo = (upgradeLevel = 0, item = null) => {
+function getEquipmentUpgradeInfo(upgradeLevel = 0, item = null) {
   const currentLevel = Math.max(Number(upgradeLevel) || 0, 0);
   if (currentLevel >= MAX_EQUIPMENT_UPGRADE_LEVEL) return null;
 
   const bagStyleInfo = BAG_UPGRADE[Math.min(currentLevel + 1, 9)] || BAG_UPGRADE[9];
-  const rarityMultiplier = {
-    common: 1,
-    rare: 1.5,
-    epic: 2.2,
-    legendary: 3.2,
-  };
-  const itemLevelValue = Math.max(item?.itemLevel || 10, 10);
-  const basePrice = bagStyleInfo.price;
-  const rarityScale = rarityMultiplier[item?.rarity] || 1;
-  const price = Math.round(basePrice * rarityScale + itemLevelValue * 20 + currentLevel * 150);
-
   return {
     successRate: bagStyleInfo.successRate,
-    price,
+    stoneCost: getEquipmentUpgradeStoneCost(item?.itemLevel || 1, item?.rarity, currentLevel),
   };
-};
+}
 
-const getBossItemSellPrice = (item, itemLevel = 10) => {
+function getUpgradeStoneSuccessBonus(rarity = 'common') {
+  return UPGRADE_STONE_RARITIES[rarity]?.successBonus || 0;
+}
+
+function getEquipmentUpgradeStoneCost(itemLevel = 1, rarity = 'common', upgradeLevel = 0) {
+  const safeUpgradeLevel = Math.max(Number(upgradeLevel) || 0, 0);
+  const safeLevel = getBossItemLevel(itemLevel);
+  const rarityBase = {
+    common: 2,
+    rare: 3,
+    epic: 5,
+    legendary: 7,
+  };
+  const levelStep = safeLevel === 1 ? 1 : Math.max(1, Math.floor(safeLevel / 20));
+  return Math.max(1, (rarityBase[rarity] || 2) + levelStep + safeUpgradeLevel);
+}
+
+function getEquipmentDismantleStoneReward(item, itemLevel = 1, upgradeLevel = 0) {
+  const baseCost = getEquipmentUpgradeStoneCost(itemLevel, item?.rarity, upgradeLevel);
+  const bonusFromUpgrade = Math.max(Number(upgradeLevel) || 0, 0);
+  return Math.max(1, Math.floor(baseCost * 0.7) + bonusFromUpgrade);
+}
+
+function getBossItemSellPrice(item, itemLevel = 1) {
   const rarityBase = {
     common: 350,
     rare: 800,
@@ -345,36 +456,49 @@ const getBossItemSellPrice = (item, itemLevel = 10) => {
   };
 
   const basePrice = rarityBase[item?.rarity] || 200;
-  return basePrice + Math.max(Number(itemLevel) || 10, 10) * 25;
-};
+  return basePrice + getBossItemLevel(itemLevel) * 30;
+}
 
-const getItemByType = (type) =>
-  Object.values(ALL_ITEMS).find((item) => item.type === type) || null;
+function getItemByType(type) {
+  return Object.values(ALL_ITEMS).find((item) => item.type === type) || null;
+}
 
-const getBossLootByKey = (key) => BOSS_LOOT_ITEMS[key] || null;
+function getBossLootByKey(key) {
+  return BOSS_LOOT_ITEMS[key] || null;
+}
 
-const getBossLootPool = (rarity) =>
-  (BOSS_LOOT_TABLE[rarity] || []).map((key) => BOSS_LOOT_ITEMS[key]).filter(Boolean);
+function getBossLootPool(rarity) {
+  return (BOSS_LOOT_TABLE[rarity] || []).map((key) => BOSS_LOOT_ITEMS[key]).filter(Boolean);
+}
 
-const getInventorySlots = (level) => {
+function getInventorySlots(level) {
   const normalizedLevel = Math.max(Number(level) || 1, 1);
+  if (normalizedLevel === 1) return 8;
+  if (normalizedLevel <= 5) return 8 + (normalizedLevel - 1) * 3;
+  return 20 + (normalizedLevel - 5) * 4;
+}
 
-  if (normalizedLevel === 1) return 4;
-  if (normalizedLevel <= 4) return 4 + (normalizedLevel - 1);
-  if (normalizedLevel <= 8) return 7 + (normalizedLevel - 4) * 2;
-  return 15 + (normalizedLevel - 8) * 3;
-};
-
-const formatDuration = (ms) => {
+function formatDuration(ms) {
   const totalSeconds = Math.max(Math.floor(ms / 1000), 0);
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
 
   return `${h}h ${m}m ${s}s`;
-};
+}
 
-const getBagUpgradeInfo = (currentLevel) => BAG_UPGRADE[currentLevel] || null;
+function getBagUpgradeInfo(currentLevel) {
+  return BAG_UPGRADE[currentLevel] || null;
+}
+
+function getSetBonusStats(setKey, pieceCount = 0) {
+  const config = SET_CONFIGS[setKey];
+  if (!config) return {};
+
+  if (pieceCount >= 3) return { ...(config.bonuses[3] || {}) };
+  if (pieceCount >= 2) return { ...(config.bonuses[2] || {}) };
+  return {};
+}
 
 module.exports = {
   BAG_UPGRADE,
@@ -383,18 +507,34 @@ module.exports = {
   EQUIPMENT_SLOTS,
   EQUIPMENT_DOWNGRADE_RATE_ON_FAIL,
   ITEMS,
+  LEVEL_TIERS,
+  MATERIAL_ITEMS,
   MAX_EQUIPMENT_UPGRADE_LEVEL,
-  getBossItemTotalStatValue,
-  getEquipmentSlotLabel,
-  getEquipmentUpgradeBonus,
-  getEquipmentUpgradeInfo,
+  RARITY_CONFIGS,
+  SET_CONFIGS,
+  SLOT_CONFIGS,
+  UPGRADE_STONE_RARITIES,
+  formatDuration,
+  getBagUpgradeInfo,
+  getBaseStatForLevel,
+  getEquipmentDismantleStoneReward,
   getBossItemLevel,
   getBossItemSellPrice,
   getBossItemStatValue,
-  getBagUpgradeInfo,
+  getBossItemTotalStatValue,
   getBossLootByKey,
   getBossLootPool,
-  getItemByType,
+  getCombatStatLabel,
+  getEquipmentSlotLabel,
+  getEquipmentUpgradeBonus,
+  getEquipmentUpgradeInfo,
+  getEquipmentUpgradeStoneCost,
   getInventorySlots,
-  formatDuration,
+  getItemByType,
+  getRarityLabel,
+  getSetBonusStats,
+  getSetLabel,
+  getUpgradeStoneSuccessBonus,
+  getUpgradeStoneType,
+  roundStatValue,
 };

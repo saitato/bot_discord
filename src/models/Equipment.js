@@ -14,10 +14,11 @@ const equipmentSchema = new Schema(
     userId: { type: String, required: true },
     guildId: { type: String, required: true },
     weapon: { type: equipmentSlotSchema, default: () => ({}) },
-    armor: { type: equipmentSlotSchema, default: () => ({}) },
     gloves: { type: equipmentSlotSchema, default: () => ({}) },
     helmet: { type: equipmentSlotSchema, default: () => ({}) },
     boots: { type: equipmentSlotSchema, default: () => ({}) },
+    armor: { type: equipmentSlotSchema, default: () => ({}) },
+    ring: { type: equipmentSlotSchema, default: () => ({}) },
   },
   { timestamps: true }
 );

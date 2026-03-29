@@ -14,11 +14,14 @@ const { addMissionProgress } = require('../../utils/dailyMissions');
 const {
   EQUIPMENT_SLOTS,
   ITEMS,
+  getCombatStatLabel,
   getBossItemTotalStatValue,
   getEquipmentSlotLabel,
   getBossItemSellPrice,
   getInventorySlots,
   getItemByType,
+  getRarityLabel,
+  getSetLabel,
   formatDuration,
 } = require('../../utils/economyItems');
 
@@ -70,9 +73,11 @@ async function getItemInfo(userId, guildId, type, itemLevel = 0) {
   }
 
   if (meta?.stat) {
-    const statName = meta.stat === 'crit' ? 'Crit' : meta.stat === 'armor_pen' ? 'Xuyên giáp' : 'ATK';
+    const statName = getCombatStatLabel(meta.stat);
     lines.push(`🧩 Ô trang bị: ${getEquipmentSlotLabel(meta.slot)}`);
-    lines.push(`📈 Chỉ số: ${statName} +${getBossItemTotalStatValue(meta, item.itemLevel || 10, item.upgradeLevel || 0)}`);
+    lines.push(`📈 Chỉ số: ${statName} +${getBossItemTotalStatValue(meta, item.itemLevel || 1, item.upgradeLevel || 0)}`);
+    lines.push(`🏷️ Độ hiếm: ${getRarityLabel(meta.rarity)}`);
+    lines.push(`🧬 Set: ${getSetLabel(meta.set)}`);
   }
 
   if (item.expiresAt > 0) {
@@ -115,7 +120,7 @@ async function buildShopEmbed(userId, guildId) {
           const levelText = item.itemLevel > 0 ? ` Lv ${item.itemLevel}` : '';
           const upgradeText = meta?.stat ? ` +${item.upgradeLevel || 0}` : '';
           const sellPrice = meta?.rarity
-            ? getBossItemSellPrice(meta, item.itemLevel || 10)
+            ? getBossItemSellPrice(meta, item.itemLevel || 1)
             : Math.floor((meta?.price || 0) * 0.75);
           return `${itemName}${levelText}${upgradeText} x${item.quantity} - bán ${sellPrice.toLocaleString('vi-VN')} Wcoin`;
         })
@@ -196,7 +201,7 @@ async function buildShopComponents(userId, guildId) {
       label: `${itemName}${levelText}${upgradeText}`.slice(0, 100),
       description: `SL ${item.quantity} | Bán ${
         (meta?.rarity
-          ? getBossItemSellPrice(meta, item.itemLevel || 10)
+          ? getBossItemSellPrice(meta, item.itemLevel || 1)
           : Math.floor((meta?.price || 0) * 0.75)
         ).toLocaleString('vi-VN')
       } Wcoin`,
@@ -395,7 +400,7 @@ module.exports = {
           }
 
           const refund = item.rarity
-            ? getBossItemSellPrice(item, exist.itemLevel || 10)
+            ? getBossItemSellPrice(item, exist.itemLevel || 1)
             : Math.floor(item.price * 0.75);
 
           if (item.stack) {

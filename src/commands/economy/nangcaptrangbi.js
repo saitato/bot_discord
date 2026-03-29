@@ -8,21 +8,33 @@ const {
   StringSelectMenuBuilder,
 } = require('discord.js');
 const mongoose = require('mongoose');
-const User = require('../../models/User');
 const Item = require('../../models/Item');
 const {
   EQUIPMENT_DOWNGRADE_RATE_ON_FAIL,
   MAX_EQUIPMENT_UPGRADE_LEVEL,
+  UPGRADE_STONE_RARITIES,
   getBossItemTotalStatValue,
   getEquipmentSlotLabel,
   getEquipmentUpgradeInfo,
   getItemByType,
+  getUpgradeStoneSuccessBonus,
+  getUpgradeStoneType,
 } = require('../../utils/economyItems');
 
 function getStatLabel(stat) {
+  if (stat === 'atk') return 'ATK';
+  if (stat === 'atk_percent') return 'ATK%';
+  if (stat === 'hp') return 'HP';
   if (stat === 'crit') return 'Crit';
-  if (stat === 'armor_pen') return 'Xuyên giáp';
-  return 'ATK';
+  if (stat === 'attack_speed') return 'Toc danh';
+  if (stat === 'cooldown_reduction') return 'Hoi chieu';
+  if (stat === 'dodge') return 'Ne tranh';
+  if (stat === 'cc_resist') return 'Khang CC';
+  if (stat === 'lifesteal') return 'Hut mau';
+  if (stat === 'crit_damage') return 'Crit damage';
+  if (stat === 'armor_pen') return 'Xuyen giap';
+  if (stat === 'skill_damage') return 'ST ky nang';
+  return stat || 'Chi so';
 }
 
 async function getUpgradeableItems(userId, guildId) {
@@ -38,26 +50,98 @@ async function getUpgradeableItems(userId, guildId) {
   });
 }
 
-function buildOverviewEmbed(user, items) {
+async function getStoneCounts(userId, guildId) {
+  const types = Object.keys(UPGRADE_STONE_RARITIES).map((rarity) => getUpgradeStoneType(rarity));
+  const stoneItems = await Item.find({
+    userId,
+    guildId,
+    type: { $in: types },
+    itemLevel: 0,
+  });
+
+  const counts = {};
+  for (const rarity of Object.keys(UPGRADE_STONE_RARITIES)) {
+    counts[rarity] = stoneItems.find((item) => item.type === getUpgradeStoneType(rarity))?.quantity || 0;
+  }
+  return counts;
+}
+
+function formatStoneInventory(stoneCounts) {
+  return Object.entries(UPGRADE_STONE_RARITIES)
+    .map(([rarity, config]) => `${config.label}: ${stoneCounts[rarity] || 0}`)
+    .join(' | ');
+}
+
+function getItemPreview(item) {
+  const meta = getItemByType(item.type);
+  if (!meta) return null;
+
+  const upgradeInfo = getEquipmentUpgradeInfo(item.upgradeLevel || 0, {
+    ...meta,
+    itemLevel: item.itemLevel || 1,
+  });
+
+  return {
+    item,
+    meta,
+    upgradeInfo,
+    statValue: getBossItemTotalStatValue(meta, item.itemLevel || 1, item.upgradeLevel || 0),
+  };
+}
+
+function buildStoneOptions(selectedItem, stoneCounts) {
+  if (!selectedItem) return [];
+
+  const preview = getItemPreview(selectedItem);
+  if (!preview?.upgradeInfo) return [];
+
+  return Object.entries(UPGRADE_STONE_RARITIES).map(([rarity, config]) => {
+    const ownCount = stoneCounts[rarity] || 0;
+    return {
+      rarity,
+      ownCount,
+      bonus: getUpgradeStoneSuccessBonus(rarity),
+      enough: ownCount >= preview.upgradeInfo.stoneCost,
+      finalSuccessRate: Math.min(95, preview.upgradeInfo.successRate + getUpgradeStoneSuccessBonus(rarity)),
+      stoneCost: preview.upgradeInfo.stoneCost,
+      label: config.label,
+    };
+  });
+}
+
+function buildOverviewEmbed(user, items, stoneCounts, selectedItem = null, selectedStoneRarity = null) {
   const lines = items.length
     ? items.slice(0, 15).map((item, index) => {
-        const meta = getItemByType(item.type);
-        const nextInfo = getEquipmentUpgradeInfo(item.upgradeLevel || 0, {
-          ...meta,
-          itemLevel: item.itemLevel || 10,
-        });
-        const statValue = getBossItemTotalStatValue(
-          meta,
-          item.itemLevel || 10,
-          item.upgradeLevel || 0
-        );
-
+        const preview = getItemPreview(item);
         return [
-          `\`${index + 1}\` ${meta.name} \`Lv ${item.itemLevel || 10} +${item.upgradeLevel || 0}\``,
-          `> ${getEquipmentSlotLabel(meta.slot)} • ${getStatLabel(meta.stat)} +${statValue}${nextInfo ? ` • Giá nâng cấp: ${nextInfo.price.toLocaleString('vi-VN')} Wcoin` : ' • Đã max'}`,
+          `\`${index + 1}\` ${preview.meta.name} \`Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}\``,
+          `> ${getEquipmentSlotLabel(preview.meta.slot)} | ${getStatLabel(preview.meta.stat)} +${preview.statValue}${preview.upgradeInfo ? ` | Đá cần: ${preview.upgradeInfo.stoneCost}` : ' | Đã max'}`,
         ].join('\n');
       })
     : ['**Bạn chưa có trang bị boss để nâng cấp.**'];
+
+  const selectedBlock = [];
+  if (selectedItem) {
+    const preview = getItemPreview(selectedItem);
+    if (preview) {
+      selectedBlock.push(`**Đã chọn:** ${preview.meta.name} \`Lv ${selectedItem.itemLevel || 1} +${selectedItem.upgradeLevel || 0}\``);
+      if (preview.upgradeInfo) {
+        selectedBlock.push(`Cần \`${preview.upgradeInfo.stoneCost}\` đá | Tỉ lệ gốc \`${preview.upgradeInfo.successRate}%\``);
+      }
+    }
+  }
+
+  if (selectedStoneRarity && selectedItem) {
+    const stoneOption = buildStoneOptions(selectedItem, stoneCounts).find((entry) => entry.rarity === selectedStoneRarity);
+    if (stoneOption) {
+      selectedBlock.push(
+        `**Đã chọn:** Đá ${stoneOption.label} | Bonus \`+${stoneOption.bonus}%\` | Tỉ lệ cuối \`${stoneOption.finalSuccessRate}%\` | Sở hữu \`${stoneOption.ownCount}\``
+      );
+      if (!stoneOption.enough) {
+        selectedBlock.push('`Không đủ số lượng đá này để nâng cấp`');
+      }
+    }
+  }
 
   return new EmbedBuilder()
     .setColor('#F59E0B')
@@ -65,38 +149,39 @@ function buildOverviewEmbed(user, items) {
       name: `Nâng cấp trang bị của ${user.username}`,
       iconURL: user.displayAvatarURL({ dynamic: true }),
     })
-    .setDescription(lines.join('\n\n'))
-    .setFooter({ text: 'Chọn món đồ trong menu để nâng cấp nhanh' })
+    .setDescription(
+      [
+        `**Đá nâng cấp hiện có:** ${formatStoneInventory(stoneCounts)}`,
+        selectedBlock.length ? '' : null,
+        selectedBlock.length ? selectedBlock.join('\n') : null,
+        '',
+        lines.join('\n\n'),
+      ].filter(Boolean).join('\n')
+    )
+    .setFooter({ text: 'Chọn trang bị, chọn loại đá, rồi bấm nâng cấp' })
     .setTimestamp();
 }
 
-function buildComponents(items) {
-  const select = new StringSelectMenuBuilder()
+function buildComponents(items, stoneCounts, selectedItem = null, selectedStoneRarity = null) {
+  const equipmentSelect = new StringSelectMenuBuilder()
     .setCustomId('upgrade_equipment_select')
-    .setPlaceholder(
-      items.length > 0
-        ? 'Chọn trang bị để nâng cấp'
-        : 'Bạn chưa có đồ boss để nâng cấp'
-    )
+    .setPlaceholder(items.length ? 'Chọn trang bị để nâng cấp' : 'Bạn chưa có đồ boss để nâng cấp')
     .setDisabled(items.length === 0);
 
-  if (items.length > 0) {
-    select.addOptions(
+  if (items.length) {
+    equipmentSelect.addOptions(
       items.slice(0, 25).map((item) => {
-        const meta = getItemByType(item.type);
-        const nextInfo = getEquipmentUpgradeInfo(item.upgradeLevel || 0, {
-          ...meta,
-          itemLevel: item.itemLevel || 10,
-        });
+        const preview = getItemPreview(item);
         return {
-          label: `${meta.name} Lv ${item.itemLevel || 10} +${item.upgradeLevel || 0}`.slice(0, 100),
-          description: `${getEquipmentSlotLabel(meta.slot)} | ${nextInfo ? `${nextInfo.successRate}% - ${nextInfo.price.toLocaleString('vi-VN')} Wcoin` : 'Đã max cấp'}`.slice(0, 100),
+          label: `${preview.meta.name} Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}`.slice(0, 100),
+          description: `${getEquipmentSlotLabel(preview.meta.slot)} | ${preview.upgradeInfo ? `${preview.upgradeInfo.successRate}% - ${preview.upgradeInfo.stoneCost} đá` : 'Đã max cấp'}`.slice(0, 100),
           value: item.id,
+          default: selectedItem ? item.id === selectedItem.id : false,
         };
       })
     );
   } else {
-    select.addOptions([
+    equipmentSelect.addOptions([
       {
         label: 'Không có trang bị',
         description: 'Hãy đánh boss để kiếm đồ trước',
@@ -105,9 +190,34 @@ function buildComponents(items) {
     ]);
   }
 
-  return [
-    new ActionRowBuilder().addComponents(select),
+  const rows = [new ActionRowBuilder().addComponents(equipmentSelect)];
+
+  const stoneOptions = buildStoneOptions(selectedItem, stoneCounts);
+  if (selectedItem && stoneOptions.length) {
+    const stoneSelect = new StringSelectMenuBuilder()
+      .setCustomId('upgrade_stone_select')
+      .setPlaceholder('Chọn loại đá nâng cấp')
+      .addOptions(
+        stoneOptions.map((option) => ({
+          label: `Đá ${option.label}`.slice(0, 100),
+          description: `${option.ownCount}/${option.stoneCost} | +${option.bonus}% | Cuối ${option.finalSuccessRate}%`.slice(0, 100),
+          value: option.rarity,
+          default: option.rarity === selectedStoneRarity,
+        }))
+      );
+    rows.push(new ActionRowBuilder().addComponents(stoneSelect));
+  }
+
+  const selectedStone = stoneOptions.find((option) => option.rarity === selectedStoneRarity);
+  const canUpgrade = Boolean(selectedItem && selectedStone && selectedStone.enough);
+
+  rows.push(
     new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('upgrade_equipment_confirm')
+        .setLabel('Nâng cấp')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(!canUpgrade),
       new ButtonBuilder()
         .setCustomId('upgrade_equipment_refresh')
         .setLabel('Làm mới')
@@ -116,64 +226,70 @@ function buildComponents(items) {
         .setCustomId('upgrade_equipment_close')
         .setLabel('Đóng')
         .setStyle(ButtonStyle.Danger)
-    ),
-  ];
+    )
+  );
+
+  return rows;
 }
 
-async function buildUpgradeView(userId, guildId, user) {
-  const items = await getUpgradeableItems(userId, guildId);
+async function buildUpgradeView(userId, guildId, user, selectedItemId = null, selectedStoneRarity = null) {
+  const [items, stoneCounts] = await Promise.all([
+    getUpgradeableItems(userId, guildId),
+    getStoneCounts(userId, guildId),
+  ]);
+
+  const selectedItem = selectedItemId ? items.find((item) => item.id === selectedItemId) || null : null;
+  const validStone = selectedItem && selectedStoneRarity ? selectedStoneRarity : null;
+
   return {
-    embeds: [buildOverviewEmbed(user, items)],
-    components: buildComponents(items),
+    embeds: [buildOverviewEmbed(user, items, stoneCounts, selectedItem, validStone)],
+    components: buildComponents(items, stoneCounts, selectedItem, validStone),
   };
 }
 
-async function performUpgrade(userId, guildId, itemId) {
+async function performUpgrade(userId, guildId, itemId, stoneRarity) {
   const session = await mongoose.startSession();
   session.startTransaction();
   let transactionCommitted = false;
 
   try {
-    let user = await User.findOne({ userId, guildId }).session(session);
-    if (!user) user = new User({ userId, guildId, balance: 0 });
-
     const itemDoc = await Item.findOne({
       _id: itemId,
       userId,
       guildId,
       $or: [{ expiresAt: 0 }, { expiresAt: { $gt: Date.now() } }],
     }).session(session);
-
-    if (!itemDoc) {
-      throw new Error('ITEM_NOT_FOUND');
-    }
+    if (!itemDoc) throw new Error('ITEM_NOT_FOUND');
 
     const meta = getItemByType(itemDoc.type);
-    if (!meta?.slot || !meta?.stat) {
-      throw new Error('INVALID_ITEM');
-    }
+    if (!meta?.slot || !meta?.stat) throw new Error('INVALID_ITEM');
 
     const oldUpgradeLevel = Math.max(itemDoc.upgradeLevel || 0, 0);
-    if (oldUpgradeLevel >= MAX_EQUIPMENT_UPGRADE_LEVEL) {
-      throw new Error('MAX_LEVEL');
-    }
+    if (oldUpgradeLevel >= MAX_EQUIPMENT_UPGRADE_LEVEL) throw new Error('MAX_LEVEL');
 
     const upgradeInfo = getEquipmentUpgradeInfo(oldUpgradeLevel, {
       ...meta,
-      itemLevel: itemDoc.itemLevel || 10,
+      itemLevel: itemDoc.itemLevel || 1,
     });
+    if (!upgradeInfo) throw new Error('NO_UPGRADE_INFO');
 
-    if (!upgradeInfo) {
-      throw new Error('NO_UPGRADE_INFO');
+    if (!UPGRADE_STONE_RARITIES[stoneRarity]) throw new Error('INVALID_STONE');
+
+    const stoneItem = await Item.findOne({
+      userId,
+      guildId,
+      type: getUpgradeStoneType(stoneRarity),
+      itemLevel: 0,
+    }).session(session);
+
+    if (!stoneItem || (stoneItem.quantity || 0) < upgradeInfo.stoneCost) {
+      throw new Error('NOT_ENOUGH_STONE');
     }
 
-    if ((user.balance || 0) < upgradeInfo.price) {
-      throw new Error('NOT_ENOUGH');
-    }
-
-    user.balance -= upgradeInfo.price;
-
-    const success = Math.random() * 100 < upgradeInfo.successRate;
+    stoneItem.quantity -= upgradeInfo.stoneCost;
+    const successBonus = getUpgradeStoneSuccessBonus(stoneRarity);
+    const finalSuccessRate = Math.min(95, upgradeInfo.successRate + successBonus);
+    const success = Math.random() * 100 < finalSuccessRate;
     let downgraded = false;
 
     if (success) {
@@ -184,28 +300,31 @@ async function performUpgrade(userId, guildId, itemId) {
       downgraded = true;
     }
 
-    await Promise.all([
-      user.save({ session }),
-      itemDoc.save({ session }),
-    ]);
+    const operations = [itemDoc.save({ session })];
+    if (stoneItem.quantity <= 0) operations.push(stoneItem.deleteOne({ session }));
+    else operations.push(stoneItem.save({ session }));
+    await Promise.all(operations);
 
     await session.commitTransaction();
     transactionCommitted = true;
 
     return {
-      userBalance: user.balance || 0,
       item: itemDoc,
       meta,
       success,
       downgraded,
-      upgradeInfo,
+      upgradeInfo: { ...upgradeInfo, finalSuccessRate },
+      selectedStone: {
+        rarity: stoneRarity,
+        successBonus,
+        label: UPGRADE_STONE_RARITIES[stoneRarity].label,
+      },
       oldUpgradeLevel,
       newUpgradeLevel: itemDoc.upgradeLevel || 0,
+      stoneBalance: Math.max(stoneItem.quantity || 0, 0),
     };
   } catch (error) {
-    if (!transactionCommitted) {
-      await session.abortTransaction();
-    }
+    if (!transactionCommitted) await session.abortTransaction();
     throw error;
   } finally {
     session.endSession();
@@ -214,18 +333,19 @@ async function performUpgrade(userId, guildId, itemId) {
 
 function buildResultEmbed(result) {
   const {
-    userBalance,
+    stoneBalance,
     item,
     meta,
     success,
     downgraded,
     upgradeInfo,
+    selectedStone,
     oldUpgradeLevel,
     newUpgradeLevel,
   } = result;
 
-  const statBefore = getBossItemTotalStatValue(meta, item.itemLevel || 10, oldUpgradeLevel);
-  const statAfter = getBossItemTotalStatValue(meta, item.itemLevel || 10, newUpgradeLevel);
+  const statBefore = getBossItemTotalStatValue(meta, item.itemLevel || 1, oldUpgradeLevel);
+  const statAfter = getBossItemTotalStatValue(meta, item.itemLevel || 1, newUpgradeLevel);
   const statLabel = getStatLabel(meta.stat);
 
   return new EmbedBuilder()
@@ -234,22 +354,23 @@ function buildResultEmbed(result) {
     .setDescription(
       [
         `**Trang bị:** ${meta.name}`,
-        `**Ô:** ${getEquipmentSlotLabel(meta.slot)}`,
-        `**Cấp đồ:** \`Lv ${item.itemLevel || 10}\``,
+        `**O:** ${getEquipmentSlotLabel(meta.slot)}`,
+        `**Cấp đồ:** \`Lv ${item.itemLevel || 1}\``,
         `**Cường hóa:** \`+${oldUpgradeLevel} -> +${newUpgradeLevel}\``,
         `**Chỉ số:** \`${statLabel} ${statBefore} -> ${statAfter}\``,
         '',
         success
-          ? 'Trang bị đã hấp thụ năng lượng cường hóa.'
+          ? 'Trang bị đã hấp thụ đá nâng cấp.'
           : downgraded
-            ? 'Cường hóa thất bại và trang bị bị tụt cấp.'
-            : 'Cường hóa thất bại nhưng trang bị được giữ nguyên cấp.',
+            ? 'Nâng cấp thất bại và trang bị bị tụt cấp.'
+            : 'Nâng cấp thất bại nhưng trang bị được giữ nguyên cấp.',
       ].join('\n')
     )
     .addFields(
-      { name: 'Chi phí', value: `\`${upgradeInfo.price.toLocaleString('vi-VN')} Wcoin\``, inline: true },
-      { name: 'Tỉ lệ thành công', value: `\`${upgradeInfo.successRate}%\``, inline: true },
-      { name: 'Số dư còn lại', value: `\`${userBalance.toLocaleString('vi-VN')} Wcoin\``, inline: true }
+      { name: 'Đá tiêu hao', value: `\`${upgradeInfo.stoneCost} đá\``, inline: true },
+      { name: 'Loại đá', value: `\`${selectedStone.label} (+${selectedStone.successBonus}%)\``, inline: true },
+      { name: 'Tỉ lệ thành công', value: `\`${upgradeInfo.successRate}% -> ${upgradeInfo.finalSuccessRate}%\``, inline: true },
+      { name: 'Đá còn lại', value: `\`${stoneBalance} viên ${selectedStone.label}\``, inline: true }
     )
     .setFooter({ text: `Thất bại có ${EQUIPMENT_DOWNGRADE_RATE_ON_FAIL}% khả năng tụt cấp` })
     .setTimestamp();
@@ -257,7 +378,7 @@ function buildResultEmbed(result) {
 
 module.exports = {
   name: 'nangcaptrangbi',
-  description: 'Nâng cấp trang bị boss bằng menu chọn nhanh',
+  description: 'Nâng cấp trang bị boss bằng menu chọn đá',
 
   /**
    * @param {Client} client
@@ -275,68 +396,77 @@ module.exports = {
 
     const userId = interaction.user.id;
     const guildId = interaction.guild.id;
+    let selectedItemId = null;
+    let selectedStoneRarity = null;
 
     await interaction.editReply(await buildUpgradeView(userId, guildId, interaction.user));
     const reply = await interaction.fetchReply();
 
-    const collector = reply.createMessageComponentCollector({
-      time: 120000,
-    });
+    const collector = reply.createMessageComponentCollector({ time: 120000 });
 
     collector.on('collect', async (i) => {
       if (i.user.id !== userId) {
-        return i.reply({
-          content: 'Đây không phải bảng nâng cấp của bạn.',
-          ephemeral: true,
-        });
+        return i.reply({ content: 'Đây không phải bảng nâng cấp của bạn.', ephemeral: true });
       }
 
       if (i.customId === 'upgrade_equipment_close') {
         collector.stop('closed');
-        return i.update({
-          content: 'Đã đóng bảng nâng cấp trang bị.',
-          embeds: [],
-          components: [],
-        });
+        return i.update({ content: 'Đã đóng bảng nâng cấp trang bị.', embeds: [], components: [] });
       }
 
       if (i.customId === 'upgrade_equipment_refresh') {
-        return i.update(await buildUpgradeView(userId, guildId, interaction.user));
+        return i.update(await buildUpgradeView(userId, guildId, interaction.user, selectedItemId, selectedStoneRarity));
       }
 
       if (i.isStringSelectMenu() && i.customId === 'upgrade_equipment_select') {
         const itemId = i.values[0];
         if (itemId === 'no_item') {
-          return i.reply({
-            content: 'Bạn chưa có trang bị boss để nâng cấp.',
-            ephemeral: true,
-          });
+          return i.reply({ content: 'Bạn chưa có trang bị boss để nâng cấp.', ephemeral: true });
+        }
+
+        selectedItemId = itemId;
+        selectedStoneRarity = null;
+        return i.update(await buildUpgradeView(userId, guildId, interaction.user, selectedItemId, selectedStoneRarity));
+      }
+
+      if (i.isStringSelectMenu() && i.customId === 'upgrade_stone_select') {
+        selectedStoneRarity = i.values[0];
+        return i.update(await buildUpgradeView(userId, guildId, interaction.user, selectedItemId, selectedStoneRarity));
+      }
+
+      if (i.customId === 'upgrade_equipment_confirm') {
+        if (!selectedItemId) {
+          return i.reply({ content: 'Bạn chưa chọn trang bị.', ephemeral: true });
+        }
+        if (!selectedStoneRarity) {
+          return i.reply({ content: 'Bạn chưa chọn loại đá nâng cấp.', ephemeral: true });
         }
 
         try {
-          const result = await performUpgrade(userId, guildId, itemId);
-          const refreshedView = await buildUpgradeView(userId, guildId, interaction.user);
+          const result = await performUpgrade(userId, guildId, selectedItemId, selectedStoneRarity);
+          const refreshedView = await buildUpgradeView(userId, guildId, interaction.user, selectedItemId, selectedStoneRarity);
           refreshedView.embeds.unshift(buildResultEmbed(result));
           return i.update(refreshedView);
         } catch (error) {
           if (error.message === 'ITEM_NOT_FOUND') {
+            selectedItemId = null;
+            selectedStoneRarity = null;
             return i.update(await buildUpgradeView(userId, guildId, interaction.user));
           }
-
           if (error.message === 'INVALID_ITEM') {
             return i.reply({ content: 'Item này không phải trang bị boss để nâng cấp.', ephemeral: true });
           }
-
           if (error.message === 'MAX_LEVEL') {
             return i.reply({ content: 'Trang bị này đã đạt cấp cường hóa tối đa.', ephemeral: true });
           }
-
           if (error.message === 'NO_UPGRADE_INFO') {
             return i.reply({ content: 'Không lấy được dữ liệu nâng cấp trang bị.', ephemeral: true });
           }
-
-          if (error.message === 'NOT_ENOUGH') {
-            return i.reply({ content: 'Bạn không đủ Wcoin để nâng cấp món này.', ephemeral: true });
+          if (error.message === 'INVALID_STONE') {
+            return i.reply({ content: 'Loại đá nâng cấp không hợp lệ.', ephemeral: true });
+          }
+          if (error.message === 'NOT_ENOUGH_STONE') {
+            return i.reply({ content: 'Không đủ số lượng đá đã chọn để nâng cấp món này.', ephemeral: true });
           }
 
           console.log(error);
@@ -347,10 +477,7 @@ module.exports = {
 
     collector.on('end', async (_, reason) => {
       if (reason === 'closed') return;
-
-      await interaction.editReply({
-        components: [],
-      }).catch(() => null);
+      await interaction.editReply({ components: [] }).catch(() => null);
     });
   },
 };

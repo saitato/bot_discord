@@ -18,14 +18,14 @@ function getDifficultyLabel(difficulty) {
 
 function renderMission(mission) {
   const status = mission.claimed
-    ? '✅ Đã nhận'
+    ? 'Đã nhận'
     : mission.completed
-      ? '🎁 Hoàn thành'
-      : '⏳ Đang làm';
+      ? 'Hoàn thành'
+      : 'Đang làm';
 
   return [
     `**[${getDifficultyLabel(mission.difficulty)}] ${mission.label}**`,
-    `> Tiến độ: ${mission.progress}/${mission.target} | Thưởng: ${mission.reward} Wcoin | ${status}`,
+    `> Tiến độ: ${mission.progress}/${mission.target} | Thưởng: ${mission.reward} Wcoin + ${mission.expReward || 0} EXP | ${status}`,
   ].join('\n');
 }
 
@@ -110,7 +110,13 @@ module.exports = {
       }
 
       const createdDaily = await ensureDailyMissions(query.userId, query.guildId);
-      const { daily, claimedReward, claimedMissions } = await claimCompletedMissionRewards(user);
+      const {
+        daily,
+        claimedReward,
+        claimedExp,
+        claimedMissions,
+        xpResult,
+      } = await claimCompletedMissionRewards(user);
 
       const activeDaily = daily || createdDaily;
       const nextResetText = getNextResetText();
@@ -147,7 +153,14 @@ module.exports = {
       if (claimedReward > 0) {
         embed.addFields({
           name: '🎉 Thưởng nhiệm vụ đã nhận',
-          value: `+${claimedReward.toLocaleString('vi-VN')} Wcoin\n${claimedMissions.join('\n')}`,
+          value: [
+            `+${claimedReward.toLocaleString('vi-VN')} Wcoin`,
+            `+${claimedExp.toLocaleString('vi-VN')} EXP`,
+            xpResult?.levelUps?.length
+              ? `Lên cấp: ${xpResult.levelUps.map((level) => `Lv ${level}`).join(', ')}`
+              : null,
+            ...claimedMissions,
+          ].filter(Boolean).join('\n'),
           inline: false,
         });
       }
