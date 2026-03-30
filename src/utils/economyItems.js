@@ -1,3 +1,5 @@
+const path = require('path');
+
 const ITEMS = {
   camera: {
     key: 'camera',
@@ -61,6 +63,35 @@ const LEVEL_TIERS = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const MAX_EQUIPMENT_UPGRADE_LEVEL = 10;
 const EQUIPMENT_DOWNGRADE_RATE_ON_FAIL = 50;
 const EQUIPMENT_SLOTS = ['weapon', 'gloves', 'helmet', 'boots', 'armor', 'ring'];
+
+const EQUIPMENT_SLOT_EMOJIS = {
+  weapon: '⚔️',
+  gloves: '🧤',
+  helmet: '🪖',
+  boots: '👢',
+  armor: '🦺',
+  ring: '💍',
+};
+
+const EQUIPMENT_ICON_DIR = path.join(__dirname, '..', 'game', 'icon', 'trang-bi');
+
+const EQUIPMENT_ICON_FILES = {
+  weapon: {
+    default: 'weapon.png',
+    destroyer: 'weapon-destroyer.png',
+    arcanist: 'weapon-arcanist.png',
+    chrono: 'weapon-chrono.png',
+    phantom: 'weapon-phantom.png',
+    guardian: 'weapon-guardian.png',
+    sanguine: 'weapon-sanguine.png',
+    piercer: 'weapon-piercer.png',
+  },
+  gloves: { default: 'gloves.png' },
+  helmet: { default: 'helmet.png' },
+  boots: { default: 'boots.png' },
+  armor: { default: 'armor.png' },
+  ring: { default: 'ring.png' },
+};
 
 const SLOT_CONFIGS = {
   weapon: {
@@ -343,11 +374,12 @@ function createBossLootItems() {
         generated[itemKey] = {
           key: itemKey,
           type: itemKey,
-          name: `${RARITY_MARKERS[rarityKey] || '\u26AA'} ${setConfig.slotNames[slot]}`,
+          name: `${RARITY_MARKERS[rarityKey] || '\u26AA'} ${EQUIPMENT_SLOT_EMOJIS[slot] || ''} ${setConfig.slotNames[slot]}`.replace(/\s+/g, ' ').trim(),
           slot,
           set: setKey,
           rarity: rarityKey,
           stat: slotConfig.stat,
+          iconFile: getEquipmentIconFile(slot, setKey),
           desc: `${slotConfig.label} thuoc set ${setConfig.label}, tang ${getCombatStatLabel(slotConfig.stat)}.`,
           stack: true,
         };
@@ -373,6 +405,24 @@ const BOSS_LOOT_TABLE = Object.keys(RARITY_CONFIGS).reduce((acc, rarity) => {
   return acc;
 }, {});
 
+function getEquipmentSlotEmoji(slot) {
+  return EQUIPMENT_SLOT_EMOJIS[slot] || '🎒';
+}
+
+function getEquipmentSlotDisplay(slot) {
+  return `${getEquipmentSlotEmoji(slot)} ${getEquipmentSlotLabel(slot)}`;
+}
+
+function getEquipmentIconFile(slot, setKey = null) {
+  const slotIcons = EQUIPMENT_ICON_FILES[slot] || {};
+  if (setKey) return `${slot}-${setKey}.png`;
+  return slotIcons.default || null;
+}
+
+function getEquipmentIconPath(slot, setKey = null) {
+  const iconFile = getEquipmentIconFile(slot, setKey);
+  return iconFile ? path.join(EQUIPMENT_ICON_DIR, iconFile) : null;
+}
 function getEquipmentSlotLabel(slot) {
   return SLOT_CONFIGS[slot]?.label || 'Trang bị';
 }
@@ -516,6 +566,9 @@ module.exports = {
   BOSS_LOOT_ITEMS,
   BOSS_LOOT_TABLE,
   EQUIPMENT_SLOTS,
+  EQUIPMENT_ICON_DIR,
+  EQUIPMENT_ICON_FILES,
+  EQUIPMENT_SLOT_EMOJIS,
   EQUIPMENT_DOWNGRADE_RATE_ON_FAIL,
   ITEMS,
   LEVEL_TIERS,
@@ -536,6 +589,10 @@ module.exports = {
   getBossLootByKey,
   getBossLootPool,
   getCombatStatLabel,
+  getEquipmentIconFile,
+  getEquipmentIconPath,
+  getEquipmentSlotDisplay,
+  getEquipmentSlotEmoji,
   getEquipmentSlotLabel,
   getEquipmentUpgradeBonus,
   getEquipmentUpgradeInfo,

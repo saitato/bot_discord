@@ -14,12 +14,13 @@ const {
   MAX_EQUIPMENT_UPGRADE_LEVEL,
   UPGRADE_STONE_RARITIES,
   getBossItemTotalStatValue,
-  getEquipmentSlotLabel,
+  getEquipmentSlotDisplay,
   getEquipmentUpgradeInfo,
   getItemByType,
   getUpgradeStoneSuccessBonus,
   getUpgradeStoneType,
 } = require('../../utils/economyItems');
+const { createEquipmentIconAttachment } = require('../../utils/equipmentIconAttachment');
 
 function getStatLabel(stat) {
   if (stat === 'atk') return 'ATK';
@@ -115,7 +116,7 @@ function buildOverviewEmbed(user, items, stoneCounts, selectedItem = null, selec
         const preview = getItemPreview(item);
         return [
           `\`${index + 1}\` ${preview.meta.name} \`Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}\``,
-          `> ${getEquipmentSlotLabel(preview.meta.slot)} | ${getStatLabel(preview.meta.stat)} +${preview.statValue}${preview.upgradeInfo ? ` | Đá cần: ${preview.upgradeInfo.stoneCost}` : ' | Đã max'}`,
+          `> ${getEquipmentSlotDisplay(preview.meta.slot)} | ${getStatLabel(preview.meta.stat)} +${preview.statValue}${preview.upgradeInfo ? ` | Đá cần: ${preview.upgradeInfo.stoneCost}` : ' | Đã max'}`,
         ].join('\n');
       })
     : ['**Bạn chưa có trang bị boss để nâng cấp.**'];
@@ -174,7 +175,7 @@ function buildComponents(items, stoneCounts, selectedItem = null, selectedStoneR
         const preview = getItemPreview(item);
         return {
           label: `${preview.meta.name} Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}`.slice(0, 100),
-          description: `${getEquipmentSlotLabel(preview.meta.slot)} | ${preview.upgradeInfo ? `${preview.upgradeInfo.successRate}% - ${preview.upgradeInfo.stoneCost} đá` : 'Đã max cấp'}`.slice(0, 100),
+          description: `${getEquipmentSlotDisplay(preview.meta.slot)} | ${preview.upgradeInfo ? `${preview.upgradeInfo.successRate}% - ${preview.upgradeInfo.stoneCost} đá` : 'Đã max cấp'}`.slice(0, 100),
           value: item.id,
           default: selectedItem ? item.id === selectedItem.id : false,
         };
@@ -331,7 +332,7 @@ async function performUpgrade(userId, guildId, itemId, stoneRarity) {
   }
 }
 
-function buildResultEmbed(result) {
+function buildResultEmbed(result, thumbnailUrl = null) {
   const {
     stoneBalance,
     item,
@@ -348,13 +349,13 @@ function buildResultEmbed(result) {
   const statAfter = getBossItemTotalStatValue(meta, item.itemLevel || 1, newUpgradeLevel);
   const statLabel = getStatLabel(meta.stat);
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(success ? '#22C55E' : downgraded ? '#EF4444' : '#F59E0B')
     .setTitle(success ? 'Nâng cấp trang bị thành công' : 'Nâng cấp trang bị thất bại')
     .setDescription(
       [
         `**Trang bị:** ${meta.name}`,
-        `**O:** ${getEquipmentSlotLabel(meta.slot)}`,
+        `**O:** ${getEquipmentSlotDisplay(meta.slot)}`,
         `**Cấp đồ:** \`Lv ${item.itemLevel || 1}\``,
         `**Cường hóa:** \`+${oldUpgradeLevel} -> +${newUpgradeLevel}\``,
         `**Chỉ số:** \`${statLabel} ${statBefore} -> ${statAfter}\``,
@@ -374,6 +375,9 @@ function buildResultEmbed(result) {
     )
     .setFooter({ text: `Thất bại có ${EQUIPMENT_DOWNGRADE_RATE_ON_FAIL}% khả năng tụt cấp` })
     .setTimestamp();
+
+  if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
+  return embed;
 }
 
 module.exports = {
@@ -444,8 +448,10 @@ module.exports = {
 
         try {
           const result = await performUpgrade(userId, guildId, selectedItemId, selectedStoneRarity);
+          const icon = createEquipmentIconAttachment(result.meta);
           const refreshedView = await buildUpgradeView(userId, guildId, interaction.user, selectedItemId, selectedStoneRarity);
-          refreshedView.embeds.unshift(buildResultEmbed(result));
+          refreshedView.embeds.unshift(buildResultEmbed(result, icon?.url || null));
+          if (icon) refreshedView.files = [icon.attachment];
           return i.update(refreshedView);
         } catch (error) {
           if (error.message === 'ITEM_NOT_FOUND') {

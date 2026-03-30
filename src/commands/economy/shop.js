@@ -16,7 +16,7 @@ const {
   ITEMS,
   getCombatStatLabel,
   getBossItemTotalStatValue,
-  getEquipmentSlotLabel,
+  getEquipmentSlotDisplay,
   getBossItemSellPrice,
   getInventorySlots,
   getItemByType,
@@ -73,7 +73,7 @@ async function getItemInfo(userId, guildId, type, itemLevel = 0) {
 
   if (meta?.stat) {
     const statName = getCombatStatLabel(meta.stat);
-    lines.push(`🧩 Ô trang bị: ${getEquipmentSlotLabel(meta.slot)}`);
+    lines.push(`🧩 Ô trang bị: ${getEquipmentSlotDisplay(meta.slot)}`);
     lines.push(`📈 Chỉ số: ${statName} +${getBossItemTotalStatValue(meta, item.itemLevel || 1, item.upgradeLevel || 0)}`);
     lines.push(`🧬 Set: ${getSetLabel(meta.set)}`);
   }

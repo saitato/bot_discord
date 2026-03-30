@@ -14,10 +14,11 @@ const {
   EQUIPMENT_SLOTS,
   UPGRADE_STONE_RARITIES,
   getEquipmentDismantleStoneReward,
-  getEquipmentSlotLabel,
+  getEquipmentSlotDisplay,
   getItemByType,
   getUpgradeStoneType,
 } = require('../../utils/economyItems');
+const { createEquipmentIconAttachment } = require('../../utils/equipmentIconAttachment');
 
 async function getDismantlableItems(userId, guildId) {
   const items = await Item.find({
@@ -72,7 +73,7 @@ function buildEmbed(user, items, stoneCount) {
     ? items.slice(0, 15).map((item, index) => {
         const meta = getItemByType(item.type);
         const reward = getEquipmentDismantleStoneReward(meta, item.itemLevel || 1, item.upgradeLevel || 0);
-        return `\`${index + 1}\` ${meta.name} \`Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}\`\n> ${getEquipmentSlotLabel(meta.slot)} | Nhận \`${reward} đá\` | SL: ${item.quantity}`;
+        return `\`${index + 1}\` ${meta.name} \`Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}\`\n> ${getEquipmentSlotDisplay(meta.slot)} | Nhận \`${reward} đá\` | SL: ${item.quantity}`;
       }).join('\n\n')
     : '**Bạn chưa có trang bị để tách.**';
 
@@ -100,7 +101,7 @@ function buildComponents(items) {
         const reward = getEquipmentDismantleStoneReward(meta, item.itemLevel || 1, item.upgradeLevel || 0);
         return {
           label: `${meta.name} Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}`.slice(0, 100),
-          description: `${getEquipmentSlotLabel(meta.slot)} | Nhận ${reward} đá`.slice(0, 100),
+          description: `${getEquipmentSlotDisplay(meta.slot)} | Nhận ${reward} đá`.slice(0, 100),
           value: item.id,
         };
       })
@@ -213,8 +214,8 @@ async function performDismantle(userId, guildId, itemId) {
   }
 }
 
-function buildResultEmbed(user, result) {
-  return new EmbedBuilder()
+function buildResultEmbed(user, result, thumbnailUrl = null) {
+  const embed = new EmbedBuilder()
     .setColor('#16A34A')
     .setAuthor({
       name: `Tách trang bị của ${user.username}`,
@@ -230,6 +231,9 @@ function buildResultEmbed(user, result) {
       ].join('\n')
     )
     .setTimestamp();
+
+  if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
+  return embed;
 }
 
 module.exports = {
@@ -280,8 +284,10 @@ module.exports = {
 
         try {
           const result = await performDismantle(userId, guildId, itemId);
+          const icon = createEquipmentIconAttachment(result.meta);
           const refreshedView = await buildView(userId, guildId, interaction.user);
-          refreshedView.embeds.unshift(buildResultEmbed(interaction.user, result));
+          refreshedView.embeds.unshift(buildResultEmbed(interaction.user, result, icon?.url || null));
+          if (icon) refreshedView.files = [icon.attachment];
           return i.update(refreshedView);
         } catch (error) {
           if (error.message === 'ITEM_NOT_FOUND') {

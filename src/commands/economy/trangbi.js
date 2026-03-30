@@ -3,7 +3,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   Client,
-  EmbedBuilder,
   Interaction,
   StringSelectMenuBuilder,
 } = require('discord.js');
@@ -12,33 +11,16 @@ const Level = require('../../models/Level');
 const {
   EQUIPMENT_SLOTS,
   getBossItemStatValue,
-  getCombatStatLabel,
-  getEquipmentSlotLabel,
+  getEquipmentSlotDisplay,
   getItemByType,
-  getSetLabel,
 } = require('../../utils/economyItems');
 const {
   getEquippedCombatProfile,
   getOrCreateEquipment,
 } = require('../../utils/equipmentStats');
-
-function formatEquippedItem(entry, userLevel) {
-  if (!entry) return '`Chưa mặc`';
-
-  const baseStatValue = getBossItemStatValue(entry.meta, entry.itemLevel || 1);
-  const upgradeBonus = Math.max((entry.statValue || 0) - baseStatValue, 0);
-  const requiredLevel = Math.max(entry.itemLevel || 1, 1);
-  const statusLabel = userLevel >= requiredLevel ? 'Đang mặc được' : 'Chưa đủ level';
-
-  return [
-    `${entry.meta.name} \`Lv ${entry.itemLevel} +${entry.upgradeLevel || 0}\``,
-    `> Set: ${getSetLabel(entry.meta.set)}`,
-    `> Yêu cầu: Lv ${requiredLevel} | ${statusLabel}`,
-    `> ${getCombatStatLabel(entry.meta.stat)} gốc: +${baseStatValue}`,
-    `> Cường hóa: +${upgradeBonus}`,
-    `> Tổng chỉ số: +${entry.statValue}`,
-  ].join('\n');
-}
+const {
+  renderEquipmentBoard,
+} = require('../../utils/equipmentBoard');
 
 async function getOwnedGearItems(userId, guildId) {
   const items = await Item.find({
@@ -51,55 +33,6 @@ async function getOwnedGearItems(userId, guildId) {
     const meta = getItemByType(item.type);
     return Boolean(meta?.slot && meta?.stat);
   });
-}
-
-function buildSetBonusLines(activeSetBonuses) {
-  if (!activeSetBonuses.length) return '`Chưa kích hoạt set`';
-
-  return activeSetBonuses.map((bonus) => {
-    const statsText = Object.entries(bonus.stats)
-      .map(([stat, value]) => `${getCombatStatLabel(stat)} +${value}`)
-      .join(' | ');
-    return `${getSetLabel(bonus.setKey)} (${bonus.pieces} món): ${statsText}`;
-  }).join('\n');
-}
-
-function buildEquipmentEmbed(user, profile) {
-  const { stats, equippedItems, level, activeSetBonuses } = profile;
-
-  return new EmbedBuilder()
-    .setColor('#F59E0B')
-    .setAuthor({
-      name: `Trang bị của ${user.username}`,
-      iconURL: user.displayAvatarURL({ dynamic: true }),
-    })
-    .setDescription(
-      [
-        `**Level nhân vật:** \`Lv ${level}\``,
-        `**Damage boss:** \`${stats.totalMin} - ${stats.totalMax}\``,
-        `**Nếu crit:** \`${Math.floor(stats.totalMin * stats.critMultiplier)} - ${Math.floor(stats.totalMax * stats.critMultiplier)}\``,
-        `**ATK:** \`+${stats.atk}\` | **ATK%:** \`${stats.atkPercent}%\``,
-        `**HP:** \`${stats.hp}\` | **DEF:** \`${stats.def}\``,
-        `**HP cơ bản:** \`${stats.hpBase}\` | **HP từ đồ:** \`+${stats.hpBonus}\``,
-        `**Giảm sát thương từ DEF:** \`${stats.damageReductionPercent}%\``,
-        `**Crit:** \`${stats.crit}%\` | **Crit damage:** \`${stats.critDamagePercent}%\``,
-        `**Tốc đánh:** \`${stats.attackSpeed}%\` | **Hồi chiêu:** \`${stats.cooldownReduction}%\``,
-        `**Né tránh:** \`${stats.dodge}%\` | **Kháng CC:** \`${stats.ccResist}%\``,
-        `**Hút máu:** \`${stats.lifesteal}%\``,
-        `**Xuyên giáp:** \`${stats.armorPen}%\` | **ST kỹ năng:** \`${stats.skillDamage}%\``,
-      ].join('\n')
-    )
-    .addFields(
-      { name: 'Set đang kích hoạt', value: buildSetBonusLines(activeSetBonuses), inline: false },
-      { name: 'Vũ khí', value: formatEquippedItem(equippedItems.weapon, level), inline: false },
-      { name: 'Găng tay', value: formatEquippedItem(equippedItems.gloves, level), inline: false },
-      { name: 'Mũ', value: formatEquippedItem(equippedItems.helmet, level), inline: false },
-      { name: 'Giày', value: formatEquippedItem(equippedItems.boots, level), inline: false },
-      { name: 'Áo', value: formatEquippedItem(equippedItems.armor, level), inline: false },
-      { name: 'Nhẫn', value: formatEquippedItem(equippedItems.ring), inline: false }
-    )
-    .setFooter({ text: 'Mỗi món đồ hiển thị stat gốc theo level, cường hóa, màu độ hiếm và set' })
-    .setTimestamp();
 }
 
 function buildComponents(gearItems) {
@@ -119,7 +52,7 @@ function buildComponents(gearItems) {
         const baseStatValue = getBossItemStatValue(meta, item.itemLevel || 1);
         return {
           label: `${meta.name} Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}`.slice(0, 100),
-          description: `${getEquipmentSlotLabel(meta.slot)} | ${getCombatStatLabel(meta.stat)} +${baseStatValue} | ${getSetLabel(meta.set)}`.slice(0, 100),
+          description: `${getEquipmentSlotDisplay(meta.slot)} | ${baseStatValue}`.slice(0, 100),
           value: item.id,
         };
       })
@@ -142,7 +75,7 @@ function buildComponents(gearItems) {
       slots.map((slot) =>
         new ButtonBuilder()
           .setCustomId(`unequip_${slot}`)
-          .setLabel(`Thao ${getEquipmentSlotLabel(slot)}`)
+          .setLabel(`Thao ${getEquipmentSlotDisplay(slot)}`)
           .setStyle(ButtonStyle.Secondary)
       )
     )
@@ -154,11 +87,11 @@ function buildComponents(gearItems) {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('equip_refresh')
-        .setLabel('Lam moi')
+        .setLabel('Làm mới')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('equip_close')
-        .setLabel('Dong')
+        .setLabel('Đóng')
         .setStyle(ButtonStyle.Danger)
     ),
   ];
@@ -170,8 +103,12 @@ async function buildEquipmentView(userId, guildId, user) {
     getOwnedGearItems(userId, guildId),
   ]);
 
+  const boardAttachment = await renderEquipmentBoard(user, profile);
+
   return {
-    embeds: [buildEquipmentEmbed(user, profile)],
+    content: `Trang bị của **${user.username}**`,
+    embeds: [],
+    files: [boardAttachment],
     components: buildComponents(gearItems),
   };
 }
@@ -208,7 +145,7 @@ module.exports = {
     collector.on('collect', async (i) => {
       if (i.user.id !== userId) {
         return i.reply({
-          content: 'Day khong phai bang trang bi cua ban.',
+          content: 'Đây không phải bảng trang bị của bạn.',
           ephemeral: true,
         });
       }
@@ -216,8 +153,9 @@ module.exports = {
       if (i.customId === 'equip_close') {
         collector.stop('closed');
         return i.update({
-          content: 'Da dong bang trang bi.',
+          content: 'Đã đóng bảng trang bị.',
           embeds: [],
+          files: [],
           components: [],
         });
       }
@@ -231,7 +169,7 @@ module.exports = {
         const itemId = i.values[0];
         if (itemId === 'no_item') {
           return i.reply({
-            content: 'Ban chua co do boss de mac.',
+            content: 'Bạn chưa có đồ boss để mặc.',
             ephemeral: true,
           });
         }
@@ -251,7 +189,7 @@ module.exports = {
         const meta = getItemByType(item.type);
         if (!meta?.slot || !meta?.stat) {
           return i.reply({
-            content: 'Item nay khong the trang bi.',
+            content: 'Item này không thể trang bị.',
             ephemeral: true,
           });
         }
@@ -261,7 +199,7 @@ module.exports = {
         const requiredLevel = Math.max(item.itemLevel || 1, 1);
         if (userLevel < requiredLevel) {
           return i.reply({
-            content: `Ban can dat Lv ${requiredLevel} moi mac duoc mon do nay. Hien tai ban dang Lv ${userLevel}.`,
+            content: `Bạn cần đạt Lv ${requiredLevel} mới mặc được món đồ này. Hiện tại bạn đang Lv ${userLevel}.`,
             ephemeral: true,
           });
         }
@@ -282,7 +220,7 @@ module.exports = {
         const slot = i.customId.replace('unequip_', '');
         if (!EQUIPMENT_SLOTS.includes(slot)) {
           return i.reply({
-            content: 'O trang bi khong hop le.',
+            content: 'Ô trang bị không hợp lệ.',
             ephemeral: true,
           });
         }

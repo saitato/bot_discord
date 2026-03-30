@@ -14,6 +14,7 @@ const {
   getBossItemLevel,
   getInventorySlots,
 } = require('../../utils/economyItems');
+const { createEquipmentIconAttachment } = require('../../utils/equipmentIconAttachment');
 
 const cooldowns = new Set();
 
@@ -37,8 +38,10 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString('vi-VN');
 }
 
-function createEmbed(text) {
-  return new EmbedBuilder().setColor(0xf59e0b).setDescription(text);
+function createEmbed(text, thumbnailUrl = null) {
+  const embed = new EmbedBuilder().setColor(0xf59e0b).setDescription(text);
+  if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
+  return embed;
 }
 
 const stories = [
@@ -241,8 +244,11 @@ module.exports = async (client, message) => {
       ? story.take(i.user.username)
       : story.return(i.user.username);
 
+    const icon = equipmentResult?.loot ? createEquipmentIconAttachment(equipmentResult.loot) : null;
+
     await i.update({
-      embeds: [createEmbed(buildResultText(baseMessage, outcome, equipmentResult))],
+      embeds: [createEmbed(buildResultText(baseMessage, outcome, equipmentResult), icon?.url || null)],
+      files: icon ? [icon.attachment] : [],
       components: [],
     });
   });
