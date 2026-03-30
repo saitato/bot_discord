@@ -15,7 +15,6 @@ const {
   getCombatStatLabel,
   getEquipmentSlotLabel,
   getItemByType,
-  getRarityLabel,
   getSetLabel,
 } = require('../../utils/economyItems');
 const {
@@ -33,7 +32,7 @@ function formatEquippedItem(entry, userLevel) {
 
   return [
     `${entry.meta.name} \`Lv ${entry.itemLevel} +${entry.upgradeLevel || 0}\``,
-    `> Độ hiếm: ${getRarityLabel(entry.meta.rarity)} | Set: ${getSetLabel(entry.meta.set)}`,
+    `> Set: ${getSetLabel(entry.meta.set)}`,
     `> Yêu cầu: Lv ${requiredLevel} | ${statusLabel}`,
     `> ${getCombatStatLabel(entry.meta.stat)} gốc: +${baseStatValue}`,
     `> Cường hóa: +${upgradeBonus}`,
@@ -99,7 +98,7 @@ function buildEquipmentEmbed(user, profile) {
       { name: 'Áo', value: formatEquippedItem(equippedItems.armor, level), inline: false },
       { name: 'Nhẫn', value: formatEquippedItem(equippedItems.ring), inline: false }
     )
-    .setFooter({ text: 'Mỗi món đồ hiển thị stat gốc theo level, cường hóa, rarity và set' })
+    .setFooter({ text: 'Mỗi món đồ hiển thị stat gốc theo level, cường hóa, màu độ hiếm và set' })
     .setTimestamp();
 }
 
@@ -120,7 +119,7 @@ function buildComponents(gearItems) {
         const baseStatValue = getBossItemStatValue(meta, item.itemLevel || 1);
         return {
           label: `${meta.name} Lv ${item.itemLevel || 1} +${item.upgradeLevel || 0}`.slice(0, 100),
-          description: `${getEquipmentSlotLabel(meta.slot)} | ${getCombatStatLabel(meta.stat)} +${baseStatValue} | ${getRarityLabel(meta.rarity)} | ${getSetLabel(meta.set)}`.slice(0, 100),
+          description: `${getEquipmentSlotLabel(meta.slot)} | ${getCombatStatLabel(meta.stat)} +${baseStatValue} | ${getSetLabel(meta.set)}`.slice(0, 100),
           value: item.id,
         };
       })

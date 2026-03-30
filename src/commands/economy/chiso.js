@@ -8,7 +8,6 @@ const {
   getBossItemStatValue,
   getCombatStatLabel,
   getEquipmentSlotLabel,
-  getRarityLabel,
   getSetLabel,
 } = require('../../utils/economyItems');
 const { getEquippedCombatProfile } = require('../../utils/equipmentStats');
@@ -21,7 +20,7 @@ function buildEquippedLine(entry) {
 
   return [
     `${entry.meta.name} \`Lv ${entry.itemLevel} +${entry.upgradeLevel || 0}\``,
-    `> Ô: ${getEquipmentSlotLabel(entry.meta.slot)} | Độ hiếm: ${getRarityLabel(entry.meta.rarity)} | Set: ${getSetLabel(entry.meta.set)}`,
+    `> Ô: ${getEquipmentSlotLabel(entry.meta.slot)} | Set: ${getSetLabel(entry.meta.set)}`,
     `> ${getCombatStatLabel(entry.meta.stat)} gốc: +${baseStatValue}`,
     `> Cường hóa: +${upgradeBonus}`,
     `> Tổng: +${entry.statValue}`,

@@ -37,7 +37,7 @@ const BOSS_UPDATE_INTERVAL_MS = 1800;
 const PLAYER_REVIVE_MS = 60 * 1000;
 const BOSS_STUN_DURATION_MS = 3200;
 const BOSS_SKILL_COOLDOWN_MS = 15000;
-const LOOT_DAMAGE_THRESHOLD = 0.1;
+const LOOT_DAMAGE_THRESHOLD = 0.05;
 const AUTO_MONSTER_SPAWN_RATE = 0.005;
 const AUTO_BOSS_SPAWN_RATE = 0.0005;
 const BASE_BOSS_HP = 10000;
@@ -60,56 +60,56 @@ const BOSS_TEST_PRESETS = {
     defenseMultiplier: 0.75,
     attackIntervalMultiplier: 1.08,
     suffixLabel: 'Test 2',
-    lootWeights: { common: 80, rare: 20, epic: 0, legendary: 0 },
+    lootWeights: { common: 68, rare: 24, epic: 8, legendary: 0 },
   },
 };
 
 const BOSS_RARITY_CONFIGS = {
   common: {
-    label: 'Thường',
+    label: 'Th\u01b0\u1eddng',
     color: 0x94a3b8,
     weight: 48,
     hpMultiplier: 1,
     damageMultiplier: 0.88,
     defense: 28,
     lootChance: 100,
-    lootWeights: { common: 82, rare: 16, epic: 2, legendary: 0 },
+    lootWeights: { common: 77, rare: 18, epic: 4, legendary: 1 },
   },
   rare: {
-    label: 'Hiếm',
+    label: 'Hi\u1ebfm',
     color: 0x3b82f6,
     weight: 29,
     hpMultiplier: 1.2,
     damageMultiplier: 0.94,
     defense: 42,
     lootChance: 100,
-    lootWeights: { common: 46, rare: 41, epic: 11, legendary: 2 },
+    lootWeights: { common: 48, rare: 34, epic: 15, legendary: 3 },
   },
   epic: {
-    label: 'Sử thi',
+    label: 'S\u1eed thi',
     color: 0xa855f7,
     weight: 16,
     hpMultiplier: 1.45,
     damageMultiplier: 0.98,
     defense: 58,
     lootChance: 100,
-    lootWeights: { common: 20, rare: 42, epic: 30, legendary: 8 },
+    lootWeights: { common: 24, rare: 40, epic: 30, legendary: 6 },
   },
   legendary: {
-    label: 'Huyền thoại',
+    label: 'Huy\u1ec1n tho\u1ea1i',
     color: 0xf59e0b,
     weight: 7,
     hpMultiplier: 1.75,
     damageMultiplier: 1.04,
     defense: 76,
     lootChance: 100,
-    lootWeights: { common: 0, rare: 28, epic: 47, legendary: 25 },
+    lootWeights: { common: 8, rare: 32, epic: 45, legendary: 15 },
   },
 };
 
 const BOSS_ARCHETYPES = {
   balanced: {
-    label: 'Tổng hợp',
+    label: 'T\u1ed5ng h\u1ee3p',
     hpMultiplier: 1,
     damageMultiplier: 1,
     defenseMultiplier: 1,
@@ -117,8 +117,8 @@ const BOSS_ARCHETYPES = {
     skillChance: 10,
     stunDurationMs: BOSS_STUN_DURATION_MS,
     skillCooldownMs: 16000,
-    trait: 'Chỉ số cân bằng, kỹ năng không quá dồn dập.',
-    names: ['Ve Binh Co Dai', 'Linh Hon Hung Bao', 'Quan Vuong Co Mieu'],
+    trait: 'Ch\u1ec9 s\u1ed1 c\u00e2n b\u1eb1ng, k\u1ef9 n\u0103ng kh\u00f4ng qu\u00e1 d\u1ed3n d\u1eadp.',
+    names: ['V\u1ec7 Binh C\u1ed5 \u0110\u1ea1i', 'Linh H\u1ed3n Hung B\u1ea1o', 'Qu\u00e2n V\u01b0\u01a1ng C\u1ed5 Mi\u1ebfu'],
   },
   crusher: {
     label: 'Dame to',
@@ -129,8 +129,8 @@ const BOSS_ARCHETYPES = {
     skillChance: 8,
     stunDurationMs: 2800,
     skillCooldownMs: 18000,
-    trait: 'Đòn rất đau, nhưng kỹ năng khống chế không thường xuyên.',
-    names: ['Cuong Quy Pha Nui', 'Sat Thu Than Loi', 'Ma Vung Phan No'],
+    trait: '\u0110\u00f2n r\u1ea5t \u0111au, nh\u01b0ng k\u1ef9 n\u0103ng kh\u1ed1ng ch\u1ebf kh\u00f4ng th\u01b0\u1eddng xuy\u00ean.',
+    names: ['Cu\u1ed3ng Qu\u1ef7 Ph\u00e1 N\u00fai', 'S\u00e1t Th\u1ee7 Th\u1ea7n L\u00f4i', 'Ma V\u01b0\u01a1ng Ph\u1eabn N\u1ed9'],
   },
   ironwall: {
     label: 'Def cao',
@@ -141,11 +141,11 @@ const BOSS_ARCHETYPES = {
     skillChance: 7,
     stunDurationMs: 2500,
     skillCooldownMs: 17000,
-    trait: 'Phòng thủ cao, giao tranh kéo dài nhưng không spam choáng.',
-    names: ['Thanh Da Bat Diet', 'Than Golem Sat', 'Thu Linh Thiet Bich'],
+    trait: 'Ph\u00f2ng th\u1ee7 cao, giao tranh k\u00e9o d\u00e0i nh\u01b0ng kh\u00f4ng spam cho\u00e1ng.',
+    names: ['Th\u00e0nh \u0110\u00e1 B\u1ea5t Di\u1ec7t', 'Th\u1ea7n Golem S\u1eaft', 'Th\u1ee7 L\u0129nh Thi\u1ebft B\u00edch'],
   },
   tyrant: {
-    label: 'Choáng mạnh',
+    label: 'Cho\u00e1ng m\u1ea1nh',
     hpMultiplier: 1.05,
     damageMultiplier: 0.82,
     defenseMultiplier: 1.02,
@@ -153,11 +153,11 @@ const BOSS_ARCHETYPES = {
     skillChance: 16,
     stunDurationMs: 4200,
     skillCooldownMs: 12000,
-    trait: 'Thiên về khống chế, nhưng vẫn có khoảng nghỉ giữa các lần dùng chiêu.',
-    names: ['Bao Chu Tram Mac', 'Yeu Vuong Dinh Menh', 'Chu Te Bop Nghet'],
+    trait: 'Thi\u00ean v\u1ec1 kh\u1ed1ng ch\u1ebf, nh\u01b0ng v\u1eabn c\u00f3 kho\u1ea3ng ngh\u1ec9 gi\u1eefa c\u00e1c l\u1ea7n d\u00f9ng chi\u00eau.',
+    names: ['B\u1ea1o Ch\u00faa Tr\u1ea7m M\u1eb7c', 'Y\u00eau V\u01b0\u01a1ng \u0110\u1ecbnh M\u1ec7nh', 'Ch\u1ee7 T\u1ebf B\u00f3p Ngh\u1eb9t'],
   },
   assassin: {
-    label: 'Đánh nhanh',
+    label: '\u0110\u00e1nh nhanh',
     hpMultiplier: 0.88,
     damageMultiplier: 0.9,
     defenseMultiplier: 0.95,
@@ -165,8 +165,8 @@ const BOSS_ARCHETYPES = {
     skillChance: 9,
     stunDurationMs: 2200,
     skillCooldownMs: 15000,
-    trait: 'Đánh nhanh, nguy hiểm với người máu thấp nhưng ít khống chế hơn.',
-    names: ['Anh Sat Bong Dem', 'Doc Nhan Huyen Nha', 'Phan Hinh Tu Than'],
+    trait: '\u0110\u00e1nh nhanh, nguy hi\u1ec3m v\u1edbi ng\u01b0\u1eddi m\u00e1u th\u1ea5p nh\u01b0ng \u00edt kh\u1ed1ng ch\u1ebf h\u01a1n.',
+    names: ['\u00c1m S\u00e1t B\u00f3ng \u0110\u00eam', '\u0110\u1ed9c Nh\u00e3n Huy\u1ec1n Nha', 'Ph\u1ea3n H\u00ecnh T\u1eed Th\u1ea7n'],
   },
 };
 
@@ -266,12 +266,12 @@ function getBossAttackDamage(state) {
 function formatLootRate(weights = {}) {
   const parts = [];
 
-  if ((weights.common || 0) > 0) parts.push(`Thường ${weights.common}%`);
-  if ((weights.rare || 0) > 0) parts.push(`Hiếm ${weights.rare}%`);
-  if ((weights.epic || 0) > 0) parts.push(`Sử thi ${weights.epic}%`);
-  if ((weights.legendary || 0) > 0) parts.push(`Huyền thoại ${weights.legendary}%`);
+  if ((weights.common || 0) > 0) parts.push(`Th\u01b0\u1eddng ${weights.common}%`);
+  if ((weights.rare || 0) > 0) parts.push(`Hi\u1ebfm ${weights.rare}%`);
+  if ((weights.epic || 0) > 0) parts.push(`S\u1eed thi ${weights.epic}%`);
+  if ((weights.legendary || 0) > 0) parts.push(`Huy\u1ec1n tho\u1ea1i ${weights.legendary}%`);
 
-  return parts.join(' | ') || 'Không có';
+  return parts.join(' | ') || 'Kh\u00f4ng c\u00f3';
 }
 
 function createBossState(message, preset = BOSS_TEST_PRESETS.testboss001) {
@@ -317,10 +317,10 @@ function createBossState(message, preset = BOSS_TEST_PRESETS.testboss001) {
 }
 
 function getRarityLabel(rarity) {
-  if (rarity === 'legendary') return 'Huyền thoại';
-  if (rarity === 'epic') return 'Sử thi';
-  if (rarity === 'rare') return 'Hiếm';
-  return 'Thường';
+  if (rarity === 'legendary') return 'Huy\u1ec1n tho\u1ea1i';
+  if (rarity === 'epic') return 'S\u1eed thi';
+  if (rarity === 'rare') return 'Hi\u1ebfm';
+  return 'Th\u01b0\u1eddng';
 }
 
 function getStatLabel(stat) {
@@ -607,7 +607,7 @@ async function rewardParticipants(state) {
       participant.stoneRarity = stoneRarity;
     }
 
-    if (participant.damage <= damageThreshold) continue;
+    if (participant.damage < damageThreshold) continue;
 
     const rarity = pickBossLootRarity(state);
     const lootPool = getBossLootPool(rarity);
@@ -681,7 +681,7 @@ function buildVictorySummary(state) {
               ? ' | Mat da vi balo day'
               : '';
           const lootText = entry.loot
-            ? ` | Nhan: ${entry.loot.name} Lv ${entry.loot.itemLevel} (${getEquipmentSlotLabel(entry.loot.slot)} - ${getRarityLabel(entry.loot.rarity)} - Set ${getSetLabel(entry.loot.set)} - ${getStatLabel(entry.loot.stat)} +${entry.loot.scaledStatValue})`
+            ? ` | Nhan: ${entry.loot.name} Lv ${entry.loot.itemLevel} (${getEquipmentSlotLabel(entry.loot.slot)} - Set ${getSetLabel(entry.loot.set)} - ${getStatLabel(entry.loot.stat)} +${entry.loot.scaledStatValue})`
             : entry.noLoot
               ? ' | Khong may man roi trang bi lan nay'
             : entry.lootBlocked

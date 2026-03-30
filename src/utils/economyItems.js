@@ -180,6 +180,13 @@ const RARITY_CONFIGS = {
   legendary: { label: 'Huyền thoại', multiplier: 1.85 },
 };
 
+const RARITY_MARKERS = {
+  common: '\u26AA',
+  rare: '\u{1F535}',
+  epic: '\u{1F7E3}',
+  legendary: '\u{1F534}',
+};
+
 const SET_CONFIGS = {
   destroyer: {
     label: 'Hủy Diệt',
@@ -336,7 +343,7 @@ function createBossLootItems() {
         generated[itemKey] = {
           key: itemKey,
           type: itemKey,
-          name: `${setConfig.slotNames[slot]} ${rarityConfig.label}`,
+          name: `${RARITY_MARKERS[rarityKey] || '\u26AA'} ${setConfig.slotNames[slot]}`,
           slot,
           set: setKey,
           rarity: rarityKey,
@@ -372,6 +379,10 @@ function getEquipmentSlotLabel(slot) {
 
 function getRarityLabel(rarity) {
   return RARITY_CONFIGS[rarity]?.label || 'Thường';
+}
+
+function getRarityMarker(rarity) {
+  return RARITY_MARKERS[rarity] || RARITY_MARKERS.common;
 }
 
 function getSetLabel(setKey) {
@@ -532,6 +543,7 @@ module.exports = {
   getInventorySlots,
   getItemByType,
   getRarityLabel,
+  getRarityMarker,
   getSetBonusStats,
   getSetLabel,
   getUpgradeStoneSuccessBonus,

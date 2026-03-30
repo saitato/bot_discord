@@ -11,7 +11,6 @@ const {
   getEquipmentSlotLabel,
   getItemByType,
   getInventorySlots,
-  getRarityLabel,
   getSetLabel,
   formatDuration,
 } = require('../../utils/economyItems');
@@ -28,7 +27,6 @@ const buildItemLine = (item, index) => {
   const itemLevelText = item.itemLevel > 0 ? ` | Lv ${item.itemLevel}` : '';
   const upgradeText = meta?.stat ? ` | +${item.upgradeLevel || 0}` : '';
   const slotText = meta?.slot ? ` | ${getEquipmentSlotLabel(meta.slot)}` : '';
-  const rarityText = meta?.rarity ? ` | ${getRarityLabel(meta.rarity)}` : '';
   const setText = meta?.set ? ` | Set ${getSetLabel(meta.set)}` : '';
   const statText = meta?.stat
     ? ` | ${getCombatStatLabel(meta.stat)} +${getBossItemTotalStatValue(meta, item.itemLevel || 1, item.upgradeLevel || 0)}`
@@ -40,7 +38,7 @@ const buildItemLine = (item, index) => {
       ? `Hạn: ${formatDuration(item.expiresAt - Date.now())}`
       : 'Vĩnh viễn';
 
-  return `\`${String(index + 1).padStart(2, '0')}\` ${itemName}${itemLevelText}${upgradeText}${slotText}${rarityText}${setText}${statText}\n> ${[quantityText, requirementText, statusText].filter(Boolean).join(' | ')}`;
+  return `\`${String(index + 1).padStart(2, '0')}\` ${itemName}${itemLevelText}${upgradeText}${slotText}${setText}${statText}\n> ${[quantityText, requirementText, statusText].filter(Boolean).join(' | ')}`;
 };
 
 module.exports = {
@@ -111,7 +109,7 @@ module.exports = {
         { name: 'Loại item', value: `\`${usedSlots}\``, inline: true },
         { name: 'Mở rộng', value: '`Lv1:8 ô | Lv2-5:+3/level | Lv6-10:+4/level`', inline: true }
       )
-      .setFooter({ text: 'Đồ boss hiện rarity, set, slot và tổng chỉ số sau cường hóa' })
+      .setFooter({ text: 'Đồ boss hiện màu độ hiếm, set, slot và tổng chỉ số sau cường hóa' })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

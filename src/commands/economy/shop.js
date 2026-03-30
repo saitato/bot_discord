@@ -20,7 +20,6 @@ const {
   getBossItemSellPrice,
   getInventorySlots,
   getItemByType,
-  getRarityLabel,
   getSetLabel,
   formatDuration,
 } = require('../../utils/economyItems');
@@ -76,7 +75,6 @@ async function getItemInfo(userId, guildId, type, itemLevel = 0) {
     const statName = getCombatStatLabel(meta.stat);
     lines.push(`🧩 Ô trang bị: ${getEquipmentSlotLabel(meta.slot)}`);
     lines.push(`📈 Chỉ số: ${statName} +${getBossItemTotalStatValue(meta, item.itemLevel || 1, item.upgradeLevel || 0)}`);
-    lines.push(`🏷️ Độ hiếm: ${getRarityLabel(meta.rarity)}`);
     lines.push(`🧬 Set: ${getSetLabel(meta.set)}`);
   }
 
