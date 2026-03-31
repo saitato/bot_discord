@@ -6,6 +6,7 @@ const {
   getCombatStatLabel,
   getEquipmentIconPath,
   getEquipmentSlotDisplay,
+  getItemIconPath,
   getSetLabel,
   formatDuration,
   getItemByType,
@@ -195,14 +196,16 @@ async function renderInventoryBoard(user, items, options = {}) {
     roundRect(ctx, x + 18, y + 22, 9, 154, 4);
     ctx.fill();
 
-    const iconPath = meta?.slot ? getEquipmentIconPath(meta.slot, meta.set) : null;
+    const iconPath = meta?.slot
+      ? getEquipmentIconPath(meta.slot, meta.set)
+      : getItemIconPath(item.type);
     const icon = await loadImageSafe(iconPath);
 
     fillPanel(ctx, x + 44, y + 34, 118, 118, '#0b1220', '#54627c', 22);
     if (icon) {
       ctx.drawImage(icon, x + 59, y + 49, 88, 88);
     } else {
-      drawText(ctx, meta?.slot ? '?' : '📦', x + 103, y + 70, {
+      drawText(ctx, '?', x + 103, y + 70, {
         size: 44,
         align: 'center',
         weight: '700',

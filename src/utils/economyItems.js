@@ -3,7 +3,7 @@ const path = require('path');
 const ITEMS = {
   camera: {
     key: 'camera',
-    name: 'Camera',
+    name: '\u{1F4F7} Camera',
     type: 'guard',
     price: 500,
     desc: 'Tu dong bat cuop trong 24 gio',
@@ -11,7 +11,7 @@ const ITEMS = {
   },
   lock_basic: {
     key: 'lock_basic',
-    name: 'Khoa chong trom',
+    name: '\u{1F512} Khoa chong trom',
     type: 'lock_basic',
     price: 200,
     desc: 'Tăng độ khó khi bị cướp trong 24 giờ',
@@ -19,7 +19,7 @@ const ITEMS = {
   },
   lock_smart: {
     key: 'lock_smart',
-    name: 'Khoa thong minh',
+    name: '\u{1F6E1}\uFE0F Khoa thong minh',
     type: 'lock_smart',
     price: 300,
     desc: 'Khoa dao chieu input trong 24 gio',
@@ -27,7 +27,7 @@ const ITEMS = {
   },
   lockpick: {
     key: 'lockpick',
-    name: 'Lockpick',
+    name: '\u{1F5DD}\uFE0F Lockpick',
     type: 'lockpick',
     price: 200,
     desc: 'Dung cu de di cuop',
@@ -36,10 +36,10 @@ const ITEMS = {
 };
 
 const UPGRADE_STONE_RARITIES = {
-  common: { label: 'Thường', successBonus: 0 },
-  rare: { label: 'Hiếm', successBonus: 4 },
-  epic: { label: 'Sử thi', successBonus: 8 },
-  legendary: { label: 'Huyền thoại', successBonus: 12 },
+  common: { label: '\u2B1C Thuong', successBonus: 0 },
+  rare: { label: '\u{1F537} Hiem', successBonus: 4 },
+  epic: { label: '\u{1F7E3} Su thi', successBonus: 8 },
+  legendary: { label: '\u{1F451} Huyen thoai', successBonus: 12 },
 };
 
 function getUpgradeStoneType(rarity = 'common') {
@@ -48,12 +48,19 @@ function getUpgradeStoneType(rarity = 'common') {
 
 const MATERIAL_ITEMS = Object.keys(UPGRADE_STONE_RARITIES).reduce((acc, rarity) => {
   const type = getUpgradeStoneType(rarity);
+  const emoji = rarity === 'common'
+    ? '\u{1FAA8}'
+    : rarity === 'rare'
+      ? '\u{1F4A0}'
+      : rarity === 'epic'
+        ? '\u{1F52E}'
+        : '\u{1F451}';
   acc[type] = {
     key: type,
-    name: `Đá nâng cấp ${UPGRADE_STONE_RARITIES[rarity].label}`,
+    name: `${emoji} Da nang cap ${UPGRADE_STONE_RARITIES[rarity].label}`,
     type,
     rarity,
-    desc: `Nguyên liệu dùng để nâng cấp trang bị boss, cộng thêm ${UPGRADE_STONE_RARITIES[rarity].successBonus}% tỉ lệ thành công.`,
+    desc: `Nguyen lieu dung de nang cap trang bi boss, cong them ${UPGRADE_STONE_RARITIES[rarity].successBonus}% ti le thanh cong.`,
     stack: true,
   };
   return acc;
@@ -74,6 +81,19 @@ const EQUIPMENT_SLOT_EMOJIS = {
 };
 
 const EQUIPMENT_ICON_DIR = path.join(__dirname, '..', 'game', 'icon', 'trang-bi');
+const ITEM_ICON_DIR = path.join(__dirname, '..', 'game', 'icon', 'item');
+
+const ITEM_ICON_FILES = {
+  guard: 'camera.png',
+  camera: 'camera.png',
+  lock_basic: 'lock-basic.png',
+  lock_smart: 'lock-smart.png',
+  lockpick: 'lockpick.png',
+  upgrade_stone_common: 'stone-common.png',
+  upgrade_stone_rare: 'stone-rare.png',
+  upgrade_stone_epic: 'stone-epic.png',
+  upgrade_stone_legendary: 'stone-legendary.png',
+};
 
 const EQUIPMENT_ICON_FILES = {
   weapon: {
@@ -419,6 +439,18 @@ function getEquipmentIconFile(slot, setKey = null) {
   return slotIcons.default || null;
 }
 
+function getItemIconFile(type = '') {
+  const normalized = String(type || '').toLowerCase();
+  if (ITEM_ICON_FILES[normalized]) return ITEM_ICON_FILES[normalized];
+  if (normalized.includes('armor')) return 'armor-generic.png';
+  if (normalized.includes('gloves')) return 'gloves-generic.png';
+  return 'box-generic.png';
+}
+
+function getItemIconPath(type = '') {
+  return path.join(ITEM_ICON_DIR, getItemIconFile(type));
+}
+
 function getEquipmentIconPath(slot, setKey = null) {
   const iconFile = getEquipmentIconFile(slot, setKey);
   return iconFile ? path.join(EQUIPMENT_ICON_DIR, iconFile) : null;
@@ -520,8 +552,56 @@ function getBossItemSellPrice(item, itemLevel = 1) {
   return basePrice + getBossItemLevel(itemLevel) * 30;
 }
 
+function getGenericItemEmoji(type = '') {
+  const normalized = String(type || '').toLowerCase();
+  if (normalized.includes('upgrade_stone_legendary')) return '\u{1F451}';
+  if (normalized.includes('upgrade_stone_epic')) return '\u{1F52E}';
+  if (normalized.includes('upgrade_stone_rare')) return '\u{1F4A0}';
+  if (normalized.includes('upgrade_stone_common')) return '\u{1FAA8}';
+  if (normalized.includes('stone') || normalized.includes('gem') || normalized.includes('crystal')) return '\u{1FAA8}';
+  if (normalized.includes('lockpick')) return '\u{1F5DD}\uFE0F';
+  if (normalized.includes('lock')) return '\u{1F512}';
+  if (normalized.includes('guard') || normalized.includes('camera')) return '\u{1F4F7}';
+  if (normalized.includes('armor')) return '\u{1F9E5}';
+  if (normalized.includes('gloves')) return '\u{1F9E4}';
+  if (normalized.includes('helmet')) return '\u{26D1}\uFE0F';
+  if (normalized.includes('boots')) return '\u{1F462}';
+  if (normalized.includes('ring')) return '\u{1F48D}';
+  if (normalized.includes('sword') || normalized.includes('weapon') || normalized.includes('dagger')) return '\u2694\uFE0F';
+  if (normalized.includes('bow')) return '\u{1F3F9}';
+  if (normalized.includes('staff') || normalized.includes('wand')) return '\u{1FA84}';
+  return '\u{1F4E6}';
+}
+
+function prettifyItemType(type = '') {
+  const normalized = String(type || '').trim();
+  if (!normalized) return 'Vat pham';
+
+  return normalized
+    .split('_')
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === 'hp') return 'HP';
+      if (lower === 'mp') return 'MP';
+      if (lower === 'atk') return 'ATK';
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+function createFallbackItemMeta(type) {
+  return {
+    key: type,
+    type,
+    name: `${getGenericItemEmoji(type)} ${prettifyItemType(type)}`.trim(),
+    desc: 'Vat pham trong balo',
+    stack: true,
+  };
+}
+
 function getItemByType(type) {
-  return Object.values(ALL_ITEMS).find((item) => item.type === type) || null;
+  return Object.values(ALL_ITEMS).find((item) => item.type === type) || createFallbackItemMeta(type);
 }
 
 function getBossLootByKey(key) {
@@ -569,6 +649,8 @@ module.exports = {
   EQUIPMENT_ICON_DIR,
   EQUIPMENT_ICON_FILES,
   EQUIPMENT_SLOT_EMOJIS,
+  ITEM_ICON_DIR,
+  ITEM_ICON_FILES,
   EQUIPMENT_DOWNGRADE_RATE_ON_FAIL,
   ITEMS,
   LEVEL_TIERS,
@@ -597,7 +679,10 @@ module.exports = {
   getEquipmentUpgradeBonus,
   getEquipmentUpgradeInfo,
   getEquipmentUpgradeStoneCost,
+  getGenericItemEmoji,
   getInventorySlots,
+  getItemIconFile,
+  getItemIconPath,
   getItemByType,
   getRarityLabel,
   getRarityMarker,

@@ -6,6 +6,7 @@ const {
   EmbedBuilder,
   ApplicationCommandOptionType,
 } = require('discord.js');
+const path = require('node:path');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const fetch = require('node-fetch');
 
@@ -192,6 +193,10 @@ async function loadCardImage(url) {
     IMAGE_CACHE.set(
       url,
       (async () => {
+        if (!/^https?:/i.test(url)) {
+          return loadImage(path.resolve(url));
+        }
+
         const response = await fetch(url, { timeout: 8000 });
         if (!response.ok) {
           throw new Error(`Không tải được ảnh lá bài: ${response.status}`);
