@@ -312,6 +312,7 @@ function createBossState(message, preset = BOSS_TEST_PRESETS.testboss001) {
     bossAttackTimeoutId: null,
     locked: false,
     defeated: false,
+    messageMissing: false,
     color: template.color,
   };
 }
@@ -715,15 +716,40 @@ function clearBossUpdateTimer(state) {
   }
 }
 
+function isUnknownMessageError(error) {
+  return error?.code === 10008 || error?.rawError?.code === 10008;
+}
+
+async function editBossMessage(state, bossMessage, payload) {
+  if (state.messageMissing) return false;
+
+  try {
+    await bossMessage.edit(payload);
+    return true;
+  } catch (error) {
+    if (isUnknownMessageError(error)) {
+      state.messageMissing = true;
+      ACTIVE_BOSSES.delete(state.guildId);
+      clearAutoAttackers(state);
+      clearBossAttackTimer(state);
+      return false;
+    }
+
+    console.log(error);
+    return false;
+  }
+}
+
 async function flushBossUpdate(state, bossMessage) {
   if (state.defeated || state.hp <= 0) return;
+  if (state.messageMissing) return;
   if (!state.pendingDescription) return;
 
   const description = state.pendingDescription;
   state.pendingDescription = null;
   clearBossUpdateTimer(state);
 
-  await bossMessage.edit({
+  await editBossMessage(state, bossMessage, {
     embeds: [buildBossEmbed(state, description)],
     components: buildBossButtons(state.commandKey, false),
   });
@@ -731,12 +757,15 @@ async function flushBossUpdate(state, bossMessage) {
 
 function queueBossUpdate(state, bossMessage, description) {
   if (state.defeated || state.hp <= 0) return;
+  if (state.messageMissing) return;
 
   state.pendingDescription = description;
   if (state.updateTimeoutId) return;
 
   state.updateTimeoutId = setTimeout(() => {
-    flushBossUpdate(state, bossMessage).catch((error) => console.log(error));
+    flushBossUpdate(state, bossMessage).catch((error) => {
+      if (!isUnknownMessageError(error)) console.log(error);
+    });
   }, BOSS_UPDATE_INTERVAL_MS);
 }
 
@@ -908,7 +937,7 @@ async function processPlayerAttack(state, user, bossMessage, collector, guildId,
 
       await rewardParticipants(state);
 
-      await bossMessage.edit({
+      await editBossMessage(state, bossMessage, {
         embeds: [
           buildBossEmbed(state, `${user} da tung don ket lieu boss.`).setFields(
             {
@@ -1145,16 +1174,12 @@ async function startBossEncounter(message, commandKey) {
     ACTIVE_BOSSES.delete(guildId);
 
     if (state.hp > 0) {
-      try {
-        await bossMessage.edit({
-          embeds: [
-            buildBossEmbed(state, 'Het thoi gian, boss da rut lui khoi chien truong.'),
-          ],
-          components: buildBossButtons(state.commandKey, true),
-        });
-      } catch (error) {
-        console.log(error);
-      }
+      await editBossMessage(state, bossMessage, {
+        embeds: [
+          buildBossEmbed(state, 'Het thoi gian, boss da rut lui khoi chien truong.'),
+        ],
+        components: buildBossButtons(state.commandKey, true),
+      });
     }
   });
   return true;
